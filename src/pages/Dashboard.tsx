@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -242,7 +243,6 @@ export default function Dashboard() {
       if (slots.length === 0 && allDaysEmpty) {
         slots = DEFAULT_SLOTS;
         if (import.meta.env?.DEV) {
-          // eslint-disable-next-line no-console
           console.log(
             "[derivedTimeSlots] using DEFAULT_SLOTS because availability is empty",
             { newAptDate, availability, DEFAULT_SLOTS },
@@ -251,7 +251,6 @@ export default function Dashboard() {
       }
 
       if (import.meta.env?.DEV) {
-        // eslint-disable-next-line no-console
         console.log("[derivedTimeSlots]", {
           newAptDate,
           computedWeekday: weekday,
@@ -427,6 +426,7 @@ export default function Dashboard() {
             return aptDate.getTime() > new Date().getTime();
           }
         } catch (e) {
+          console.log(e);
           // fallback to previous behavior
         }
 

@@ -140,6 +140,7 @@ export default function Landing() {
                         await signOut();
                         navigate("/");
                       } catch (e) {
+                        console.log(e);
                         // silent
                       }
                     }}
