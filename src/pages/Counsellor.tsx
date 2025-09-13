@@ -37,6 +37,18 @@ export default function CounsellorPage() {
     // Chat state for counsellor to enter session chat
     const [chatAppointmentId, setChatAppointmentId] = useState<string | null>(null);
 
+    // Partition and sort appointments: upcoming/scheduled first (by date asc), then past/completed
+    const sortedAppointments = (appointments ?? []).slice().sort((a: any, b: any) => {
+      const now = Date.now();
+      const ta = new Date(a.scheduledDate).getTime();
+      const tb = new Date(b.scheduledDate).getTime();
+      const aUpcoming = ta >= now;
+      const bUpcoming = tb >= now;
+      if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+      // both same partition: earlier date first
+      return ta - tb;
+    });
+
   if (isLoading) {
     return (
       <div className="w-full flex items-center justify-center">
@@ -57,9 +69,7 @@ export default function CounsellorPage() {
               No appointments assigned.
             </div>
           ) : (
-            (appointments ?? [])
-              .filter((apt: any) => apt.status !== "completed")
-              .map((apt: any) => {
+            sortedAppointments.map((apt: any) => {
                 // const upcoming =
                 //   new Date(apt.scheduledDate).getTime() >= Date.now();
                 const id = String(apt._id);
@@ -146,197 +156,213 @@ export default function CounsellorPage() {
                       )}
 
                     {/* Session result form */}
-                    <div className="space-y-2">
-                      <Label>Session Notes</Label>
-                      <Textarea
-                        value={currentEdit.sessionNotes}
-                        onChange={(e) =>
-                          setEditing((prev) => ({
-                            ...prev,
-                            [id]: {
-                              ...currentEdit,
-                              sessionNotes: e.target.value,
-                            },
-                          }))
-                        }
-                        placeholder="Summary of session, observations, and next steps"
-                      />
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {apt.status === "completed" ? (
+                      <div className="flex items-center justify-between p-3 rounded-md bg-background/30 border">
                         <div>
-                          <Label>Diagnosis (optional)</Label>
-                          <Input
-                            value={currentEdit.diagnosis}
-                            onChange={(e) =>
-                              setEditing((prev) => ({
-                                ...prev,
-                                [id]: {
-                                  ...currentEdit,
-                                  diagnosis: e.target.value,
-                                },
-                              }))
-                            }
-                            placeholder="Short diagnostic note"
-                          />
-                        </div>
-                        <div>
-                          <Label>Follow-up</Label>
-                          <Input
-                            value={currentEdit.followUp}
-                            onChange={(e) =>
-                              setEditing((prev) => ({
-                                ...prev,
-                                [id]: {
-                                  ...currentEdit,
-                                  followUp: e.target.value,
-                                },
-                              }))
-                            }
-                            placeholder="Recommended follow-up actions or referrals"
-                          />
-                        </div>
-                      </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <div>
-                            <Label>Schedule follow-up?</Label>
-                            <div className="flex items-center gap-3 mt-2">
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="radio"
-                                  name={`follow-${id}`}
-                                  checked={!scheduleFollowUp[id]}
-                                  onChange={() =>
-                                    setScheduleFollowUp((prev) => ({
-                                      ...prev,
-                                      [id]: false,
-                                    }))
-                                  }
-                                />
-                                No
-                              </label>
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="radio"
-                                  name={`follow-${id}`}
-                                  checked={!!scheduleFollowUp[id]}
-                                  onChange={() =>
-                                    setScheduleFollowUp((prev) => ({
-                                      ...prev,
-                                      [id]: true,
-                                    }))
-                                  }
-                                />
-                                Yes
-                              </label>
-                            </div>
-
-                            {scheduleFollowUp[id] ? (
-                              <div className="mt-2 grid grid-cols-2 gap-2">
-                                <Input
-                                  type="date"
-                                  value={followUpDate[id] ?? ""}
-                                  onChange={(e) =>
-                                    setFollowUpDate((prev) => ({
-                                      ...prev,
-                                      [id]: e.target.value,
-                                    }))
-                                  }
-                                />
-                                <Input
-                                  type="time"
-                                  value={followUpTime[id] ?? ""}
-                                  onChange={(e) =>
-                                    setFollowUpTime((prev) => ({
-                                      ...prev,
-                                      [id]: e.target.value,
-                                    }))
-                                  }
-                                />
-                              </div>
-                            ) : (
-                              <Input
-                                value={currentEdit.followUp}
-                                onChange={(e) =>
-                                  setEditing((prev) => ({
-                                    ...prev,
-                                    [id]: {
-                                      ...currentEdit,
-                                      followUp: e.target.value,
-                                    },
-                                  }))
-                                }
-                                placeholder="Recommended follow-up actions or referrals"
-                              />
-                            )}
+                          <div className="font-medium">{apt.student?.name ?? "Student"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(apt.scheduledDate).toLocaleDateString()} at {apt.timeSlot} • {apt.status}
                           </div>
                         </div>
-                    </div>
-
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          setEditing((prev) => ({
-                            ...prev,
-                            [id]: {
-                              sessionNotes: "",
-                              diagnosis: "",
-                              followUp: "",
-                            },
-                          }))
-                        }
-                      >
-                        Reset
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setChatAppointmentId(String(apt._id))}
-                      >
-                        Enter Chat
-                      </Button>
-                      <Button
-                        onClick={async () => {
-                          try {
-                            // prepare followUp payload
-                            const followUpPayload: string | undefined = scheduleFollowUp[id]
-                              ? JSON.stringify({
-                                  proposed: true,
-                                  date: followUpDate[id] ?? null,
-                                  timeSlot: followUpTime[id] ?? null,
-                                  note: currentEdit.followUp ?? null,
-                                })
-                              : currentEdit.followUp
-                              ? String(currentEdit.followUp)
-                              : undefined;
-    
-                            await addSessionResult({
-                              appointmentId: apt._id as any,
-                              sessionNotes:
-                                currentEdit.sessionNotes || undefined,
-                              diagnosis: currentEdit.diagnosis || undefined,
-                              followUp: followUpPayload || undefined,
-                            });
-                            toast("Session saved and marked completed");
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" onClick={() => setChatAppointmentId(String(apt._id))}>
+                            View Chat
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label>Session Notes</Label>
+                        <Textarea
+                          value={currentEdit.sessionNotes}
+                          onChange={(e) =>
                             setEditing((prev) => ({
                               ...prev,
                               [id]: {
-                                sessionNotes: "",
-                                diagnosis: "",
-                                followUp: "",
+                                ...currentEdit,
+                                sessionNotes: e.target.value,
                               },
-                            }));
-                            // clear follow-up scheduling fields
-                            setScheduleFollowUp((prev) => ({ ...prev, [id]: false }));
-                            setFollowUpDate((prev) => ({ ...prev, [id]: "" }));
-                            setFollowUpTime((prev) => ({ ...prev, [id]: "" }));
-                          } catch (e: any) {
-                            toast(e?.message ?? "Failed to save session");
+                            }))
                           }
-                        }}
-                      >
-                        Save & Complete
-                      </Button>
-                    </div>
+                          placeholder="Summary of session, observations, and next steps"
+                        />
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <Label>Diagnosis (optional)</Label>
+                            <Input
+                              value={currentEdit.diagnosis}
+                              onChange={(e) =>
+                                setEditing((prev) => ({
+                                  ...prev,
+                                  [id]: {
+                                    ...currentEdit,
+                                    diagnosis: e.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="Short diagnostic note"
+                            />
+                          </div>
+                          <div>
+                            <Label>Follow-up</Label>
+                            <Input
+                              value={currentEdit.followUp}
+                              onChange={(e) =>
+                                setEditing((prev) => ({
+                                  ...prev,
+                                  [id]: {
+                                    ...currentEdit,
+                                    followUp: e.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="Recommended follow-up actions or referrals"
+                            />
+                          </div>
+                        </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div>
+                              <Label>Schedule follow-up?</Label>
+                              <div className="flex items-center gap-3 mt-2">
+                                <label className="flex items-center gap-2">
+                                  <input
+                                    type="radio"
+                                    name={`follow-${id}`}
+                                    checked={!scheduleFollowUp[id]}
+                                    onChange={() =>
+                                      setScheduleFollowUp((prev) => ({
+                                        ...prev,
+                                        [id]: false,
+                                      }))
+                                    }
+                                  />
+                                  No
+                                </label>
+                                <label className="flex items-center gap-2">
+                                  <input
+                                    type="radio"
+                                    name={`follow-${id}`}
+                                    checked={!!scheduleFollowUp[id]}
+                                    onChange={() =>
+                                      setScheduleFollowUp((prev) => ({
+                                        ...prev,
+                                        [id]: true,
+                                      }))
+                                    }
+                                  />
+                                  Yes
+                                </label>
+                              </div>
+
+                              {scheduleFollowUp[id] ? (
+                                <div className="mt-2 grid grid-cols-2 gap-2">
+                                  <Input
+                                    type="date"
+                                    value={followUpDate[id] ?? ""}
+                                    onChange={(e) =>
+                                      setFollowUpDate((prev) => ({
+                                        ...prev,
+                                        [id]: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                  <Input
+                                    type="time"
+                                    value={followUpTime[id] ?? ""}
+                                    onChange={(e) =>
+                                      setFollowUpTime((prev) => ({
+                                        ...prev,
+                                        [id]: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                              ) : (
+                                <Input
+                                  value={currentEdit.followUp}
+                                  onChange={(e) =>
+                                    setEditing((prev) => ({
+                                      ...prev,
+                                      [id]: {
+                                        ...currentEdit,
+                                        followUp: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  placeholder="Recommended follow-up actions or referrals"
+                                />
+                              )}
+                            </div>
+                          </div>
+
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="outline"
+                            onClick={() =>
+                              setEditing((prev) => ({
+                                ...prev,
+                                [id]: {
+                                  sessionNotes: "",
+                                  diagnosis: "",
+                                  followUp: "",
+                                },
+                              }))
+                            }
+                          >
+                            Reset
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => setChatAppointmentId(String(apt._id))}
+                          >
+                            Enter Chat
+                          </Button>
+                          <Button
+                            onClick={async () => {
+                              try {
+                                // prepare followUp payload
+                                const followUpPayload: string | undefined = scheduleFollowUp[id]
+                                  ? JSON.stringify({
+                                      proposed: true,
+                                      date: followUpDate[id] ?? null,
+                                      timeSlot: followUpTime[id] ?? null,
+                                      note: currentEdit.followUp ?? null,
+                                    })
+                                  : currentEdit.followUp
+                                  ? String(currentEdit.followUp)
+                                  : undefined;
+          
+                                await addSessionResult({
+                                  appointmentId: apt._id as any,
+                                  sessionNotes:
+                                    currentEdit.sessionNotes || undefined,
+                                  diagnosis: currentEdit.diagnosis || undefined,
+                                  followUp: followUpPayload || undefined,
+                                });
+                                toast("Session saved and marked completed");
+                                setEditing((prev) => ({
+                                  ...prev,
+                                  [id]: {
+                                    sessionNotes: "",
+                                    diagnosis: "",
+                                    followUp: "",
+                                  },
+                                }));
+                                // clear follow-up scheduling fields
+                                setScheduleFollowUp((prev) => ({ ...prev, [id]: false }));
+                                setFollowUpDate((prev) => ({ ...prev, [id]: "" }));
+                                setFollowUpTime((prev) => ({ ...prev, [id]: "" }));
+                              } catch (e: any) {
+                                toast(e?.message ?? "Failed to save session");
+                              }
+                            }}
+                          >
+                            Save & Complete
+                          </Button>
+                        </div>
+                      </div>
+                    )}
 
                     {apt.sessionAudit && apt.sessionAudit.length > 0 && (
                       <div className="pt-3 border-t mt-3 text-xs text-muted-foreground space-y-1">
