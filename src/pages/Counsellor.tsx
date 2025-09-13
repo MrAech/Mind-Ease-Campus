@@ -28,6 +28,10 @@ export default function CounsellorPage() {
       { sessionNotes: string; diagnosis: string; followUp: string }
     >
   >({});
+    // Track whether counsellor wants to schedule a follow-up for each appointment
+    const [scheduleFollowUp, setScheduleFollowUp] = useState<Record<string, boolean>>({});
+    const [followUpDate, setFollowUpDate] = useState<Record<string, string>>({});
+    const [followUpTime, setFollowUpTime] = useState<Record<string, string>>({});
 
   if (isLoading) {
     return (
@@ -52,8 +56,8 @@ export default function CounsellorPage() {
             (appointments ?? [])
               .filter((apt: any) => apt.status !== "completed")
               .map((apt: any) => {
-                const upcoming =
-                  new Date(apt.scheduledDate).getTime() >= Date.now();
+                // const upcoming =
+                //   new Date(apt.scheduledDate).getTime() >= Date.now();
                 const id = String(apt._id);
 
                 const currentEdit = editing[id] ?? {
@@ -188,6 +192,80 @@ export default function CounsellorPage() {
                           />
                         </div>
                       </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <Label>Schedule follow-up?</Label>
+                            <div className="flex items-center gap-3 mt-2">
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name={`follow-${id}`}
+                                  checked={!scheduleFollowUp[id]}
+                                  onChange={() =>
+                                    setScheduleFollowUp((prev) => ({
+                                      ...prev,
+                                      [id]: false,
+                                    }))
+                                  }
+                                />
+                                No
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name={`follow-${id}`}
+                                  checked={!!scheduleFollowUp[id]}
+                                  onChange={() =>
+                                    setScheduleFollowUp((prev) => ({
+                                      ...prev,
+                                      [id]: true,
+                                    }))
+                                  }
+                                />
+                                Yes
+                              </label>
+                            </div>
+
+                            {scheduleFollowUp[id] ? (
+                              <div className="mt-2 grid grid-cols-2 gap-2">
+                                <Input
+                                  type="date"
+                                  value={followUpDate[id] ?? ""}
+                                  onChange={(e) =>
+                                    setFollowUpDate((prev) => ({
+                                      ...prev,
+                                      [id]: e.target.value,
+                                    }))
+                                  }
+                                />
+                                <Input
+                                  type="time"
+                                  value={followUpTime[id] ?? ""}
+                                  onChange={(e) =>
+                                    setFollowUpTime((prev) => ({
+                                      ...prev,
+                                      [id]: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                            ) : (
+                              <Input
+                                value={currentEdit.followUp}
+                                onChange={(e) =>
+                                  setEditing((prev) => ({
+                                    ...prev,
+                                    [id]: {
+                                      ...currentEdit,
+                                      followUp: e.target.value,
+                                    },
+                                  }))
+                                }
+                                placeholder="Recommended follow-up actions or referrals"
+                              />
+                            )}
+                          </div>
+                        </div>
                     </div>
 
                     <div className="flex gap-2 justify-end">
@@ -209,12 +287,24 @@ export default function CounsellorPage() {
                       <Button
                         onClick={async () => {
                           try {
+                            // prepare followUp payload
+                            const followUpPayload: string | undefined = scheduleFollowUp[id]
+                              ? JSON.stringify({
+                                  proposed: true,
+                                  date: followUpDate[id] ?? null,
+                                  timeSlot: followUpTime[id] ?? null,
+                                  note: currentEdit.followUp ?? null,
+                                })
+                              : currentEdit.followUp
+                              ? String(currentEdit.followUp)
+                              : undefined;
+
                             await addSessionResult({
                               appointmentId: apt._id as any,
                               sessionNotes:
                                 currentEdit.sessionNotes || undefined,
                               diagnosis: currentEdit.diagnosis || undefined,
-                              followUp: currentEdit.followUp || undefined,
+                              followUp: followUpPayload || undefined,
                             });
                             toast("Session saved and marked completed");
                             setEditing((prev) => ({
@@ -225,6 +315,10 @@ export default function CounsellorPage() {
                                 followUp: "",
                               },
                             }));
+                            // clear follow-up scheduling fields
+                            setScheduleFollowUp((prev) => ({ ...prev, [id]: false }));
+                            setFollowUpDate((prev) => ({ ...prev, [id]: "" }));
+                            setFollowUpTime((prev) => ({ ...prev, [id]: "" }));
                           } catch (e: any) {
                             toast(e?.message ?? "Failed to save session");
                           }

@@ -41,7 +41,6 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
-  DrawerClose,
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { useAction } from "convex/react";
@@ -93,8 +92,8 @@ export default function Dashboard() {
       try {
         // Stop other listeners from running. Do not set returnValue.
         e.stopImmediatePropagation?.();
-      } catch (_) {
-        // ignore
+      } catch (err) {
+        console.log(err)
       }
     }
 
@@ -110,6 +109,8 @@ export default function Dashboard() {
 
   // Add stable top-level mutation hook for pre-session form
   const submitPreForm = useMutation(api.appointments.submitPreSessionForm);
+  const acceptFollowUp = useMutation(api.appointments.acceptFollowUp);
+  const rejectFollowUp = useMutation(api.appointments.rejectFollowUp);
 
   // Add mutation and state for PHQ-9 dialog
   const submitScreening = useMutation(api.screening.submitScreening);
@@ -123,7 +124,7 @@ export default function Dashboard() {
   const [showResources, setShowResources] = React.useState(false);
 
   // Add: Forum Drawer state
-  const [showForum, setShowForum] = React.useState(false);
+  // const [showForum, setShowForum] = React.useState(false);
 
   // Fetch user's recent data
   const appointments = useQuery(
@@ -262,6 +263,7 @@ export default function Dashboard() {
 
       return slots;
     } catch (err) {
+      console.log(err);
       return [] as Array<string>;
     }
   }, [selectedCounsellor, newAptDate]);
@@ -554,6 +556,32 @@ export default function Dashboard() {
                                 Note saved
                               </span>
                             ) : null}
+                            {(appointment as any).proposedFollowUp && (
+                              <div className="mt-2 p-2 rounded bg-yellow-50 border">
+                                <div className="text-sm font-medium">Follow-up proposed</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {((appointment as any).proposedFollowUp.date ? new Date((appointment as any).proposedFollowUp.date).toLocaleDateString() : "")} at {(appointment as any).proposedFollowUp.timeSlot ?? ""}
+                                </div>
+                                <div className="mt-2 flex gap-2">
+                                  <Button size="sm" onClick={async () => {
+                                    try {
+                                      await acceptFollowUp({ appointmentId: appointment._id as any });
+                                      toast("Follow-up accepted. The session will be scheduled.");
+                                    } catch (e: any) {
+                                      toast(e?.message ?? "Failed to accept follow-up");
+                                    }
+                                  }}>Accept</Button>
+                                  <Button size="sm" variant="outline" onClick={async () => {
+                                    try {
+                                      await rejectFollowUp({ appointmentId: appointment._id as any });
+                                      toast("Follow-up rejected.");
+                                    } catch (e: any) {
+                                      toast(e?.message ?? "Failed to reject follow-up");
+                                    }
+                                  }}>Reject</Button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                           <div className="text-sm text-muted-foreground flex items-center space-x-2">
                             <Clock className="w-4 h-4" />
@@ -1352,16 +1380,14 @@ function PreSessionForm({
   }, [initialValue]);
 
   const clearPreForm = useMutation(api.appointments.clearPreSessionForm);
-
   return (
     <div className="space-y-4">
       <Textarea
-        placeholder="Describe your current concerns, symptoms, or anything you'd like your counselor to know before the session."
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="min-h-32"
+        placeholder="Share what you'd like to discuss in the session"
       />
-      <div className="flex flex-col sm:flex-row justify-end gap-2">
+      <div className="flex gap-2 justify-end">
         <Button
           variant="outline"
           className="w-full sm:w-auto"

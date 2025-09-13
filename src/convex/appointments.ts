@@ -4,6 +4,34 @@ import { getCurrentUser } from "./users";
 import { appointmentStatusValidator } from "./schema";
 import { action } from "./_generated/server";
 
+// Helper: parse an appointment's scheduledDate and optional timeSlot into a local Date
+function getAppointmentDate(appointment: any) {
+  try {
+    const dateParts = String(appointment.scheduledDate || "").split("-").map(
+      (p) => Number(p),
+    );
+    if (
+      dateParts.length === 3 &&
+      dateParts.every((n) => !Number.isNaN(n))
+    ) {
+      const [y, m, d] = dateParts;
+      let hour = 0;
+      let minute = 0;
+      if (appointment.timeSlot) {
+        const t = String(appointment.timeSlot).split(":").map((p) => Number(p));
+        if (t.length >= 2 && !Number.isNaN(t[0]) && !Number.isNaN(t[1])) {
+          hour = t[0];
+          minute = t[1];
+        }
+      }
+      return new Date(y, m - 1, d, hour, minute);
+    }
+  } catch (e) {
+    // fallthrough
+  }
+  return new Date(appointment.scheduledDate);
+}
+
 export const create = mutation({
   args: {
     counsellorId: v.id("counsellors"),
@@ -325,7 +353,7 @@ export const submitPreSessionForm = mutation({
 
     // Allow form submission only for pending/confirmed upcoming sessions
     const isUpcoming =
-      new Date(appointment.scheduledDate).getTime() >= new Date().getTime();
+      getAppointmentDate(appointment).getTime() >= new Date().getTime();
     if (!["pending", "confirmed"].includes(appointment.status) || !isUpcoming) {
       throw new Error("Form is only available for upcoming sessions");
     }
@@ -342,6 +370,7 @@ export const addSessionResult = mutation({
     appointmentId: v.id("appointments"),
     sessionNotes: v.optional(v.string()),
     diagnosis: v.optional(v.string()),
+    // followUp can be a plain note or a structured proposal object (serialized by client)
     followUp: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -403,17 +432,101 @@ export const addSessionResult = mutation({
     const existingAudit = (appointment as any).sessionAudit ?? [];
     const newAudit = [...existingAudit, auditEntry];
 
-    await ctx.db.patch(args.appointmentId, {
+    // If counsellor submitted a structured follow-up proposal (serialized JSON),
+    // store it under `proposedFollowUp` to allow the student to accept/reject.
+    let patch: any = {
       sessionNotes: args.sessionNotes,
       diagnosis: args.diagnosis,
-      followUp: args.followUp,
       status: "completed",
-      // store custom fields as `any` to avoid strict schema validation in TS
       sessionAudit: newAudit as any,
-      screeningSummary: (screeningSummary ??
-        (appointment as any).screeningSummary ??
-        null) as any,
-    } as any);
+      screeningSummary: (screeningSummary ?? (appointment as any).screeningSummary ?? null) as any,
+    };
+
+    try {
+      if (args.followUp) {
+        // try to parse JSON proposal; if parsing fails, store as plain followUp note
+        try {
+          const parsed = JSON.parse(args.followUp);
+          if (parsed && parsed.proposed === true) {
+            patch.proposedFollowUp = {
+              proposedBy: user._id,
+              proposedByName: user.name ?? null,
+              proposedAt: Date.now(),
+              date: parsed.date ?? null,
+              timeSlot: parsed.timeSlot ?? null,
+              note: parsed.note ?? null,
+              accepted: null,
+            } as any;
+          } else {
+            patch.followUp = args.followUp;
+          }
+        } catch (e) {
+          patch.followUp = args.followUp;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    await ctx.db.patch(args.appointmentId, patch as any);
+  },
+});
+
+// Student accepts a proposed follow-up: this updates the appointment's scheduledDate/timeSlot and marks accepted
+export const acceptFollowUp = mutation({
+  args: {
+    appointmentId: v.id("appointments"),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+
+    const appointment = await ctx.db.get(args.appointmentId);
+    if (!appointment) throw new Error("Appointment not found");
+
+    if (appointment.studentId !== user._id) throw new Error("Unauthorized");
+
+    const proposal = (appointment as any).proposedFollowUp;
+    if (!proposal) throw new Error("No follow-up proposed");
+    if (proposal.accepted === true) throw new Error("Follow-up already accepted");
+
+    // Update scheduledDate/timeSlot only if proposal contains them
+    const patches: any = {
+      proposedFollowUp: { ...proposal, accepted: true, acceptedAt: Date.now(), acceptedBy: user._id } as any,
+    };
+    if (proposal.date) patches.scheduledDate = proposal.date;
+    if (proposal.timeSlot) patches.timeSlot = proposal.timeSlot;
+
+    // When student accepts, set appointment status back to pending (or confirmed?)
+    patches.status = "pending";
+
+    await ctx.db.patch(args.appointmentId, patches as any);
+  },
+});
+
+export const rejectFollowUp = mutation({
+  args: {
+    appointmentId: v.id("appointments"),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+
+    const appointment = await ctx.db.get(args.appointmentId);
+    if (!appointment) throw new Error("Appointment not found");
+
+    if (appointment.studentId !== user._id) throw new Error("Unauthorized");
+
+    const proposal = (appointment as any).proposedFollowUp;
+    if (!proposal) throw new Error("No follow-up proposed");
+    if (proposal.accepted === false) throw new Error("Follow-up already rejected");
+
+    const patches: any = {
+      proposedFollowUp: { ...proposal, accepted: false, rejectedAt: Date.now(), rejectedBy: user._id, rejectionReason: args.reason ?? null } as any,
+    };
+
+    await ctx.db.patch(args.appointmentId, patches as any);
   },
 });
 
@@ -435,7 +548,7 @@ export const clearPreSessionForm = mutation({
 
     // Allow clearing only for pending/confirmed upcoming sessions
     const isUpcoming =
-      new Date(appointment.scheduledDate).getTime() >= new Date().getTime();
+      getAppointmentDate(appointment).getTime() >= new Date().getTime();
     if (!["pending", "confirmed"].includes(appointment.status) || !isUpcoming) {
       throw new Error("Form is only available for upcoming sessions");
     }

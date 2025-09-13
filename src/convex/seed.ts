@@ -22,8 +22,9 @@ export const seedDatabase = mutation({
         description:
           "Learn effective strategies to handle academic pressure and maintain balance.",
         type: "guide" as const,
-        content:
-          "Academic stress is common among college students. Here are some proven strategies to help you manage it effectively...",
+        content: 
+  "Academic stress is a challenge many students face, but it can be managed with the right approach. \n Start by organizing your time with realistic schedules and clear priorities. \nBreak large tasks into smaller steps to avoid feeling overwhelmed. \nTake regular breaks, practice mindfulness, and engage in physical activity to recharge your mind. \nDon’t hesitate to seek support from friends, mentors, or counseling services when needed. \nRemember, maintaining balance between studies, rest, and personal activities is key to staying productive \nand protecting your well-being.",
+
         language: "en",
         tags: ["stress", "academic", "study-tips"],
         institutionId,
@@ -35,7 +36,7 @@ export const seedDatabase = mutation({
         description:
           "Practical breathing exercises and mindfulness techniques for anxiety management.",
         type: "video" as const,
-        content: "https://example.com/anxiety-video",
+        content: "https://www.youtube.com/watch?v=wfDTp2GogaQ",
         language: "en",
         tags: ["anxiety", "breathing", "mindfulness"],
         institutionId,
@@ -47,8 +48,7 @@ export const seedDatabase = mutation({
         description:
           "Improve your sleep quality with these evidence-based tips.",
         type: "article" as const,
-        content:
-          "Good sleep is essential for mental health. Follow these guidelines to improve your sleep quality...",
+        content: "Quality sleep is a foundation of good mental and physical health.\nTo improve your sleep hygiene, start by maintaining a consistent bedtime and wake-up schedule, even on weekends.\nCreate a relaxing pre-sleep routine—such as reading, light stretching, or meditation—to signal your body it’s time to wind down.\nLimit caffeine and heavy meals close to bedtime, and reduce screen exposure at least an hour before sleeping.\nEnsure your bedroom is quiet, dark, and cool for an optimal sleep environment.\nBy following these practices, you can enhance your sleep quality, improve focus, and support overall well-being.",
         language: "en",
         tags: ["sleep", "wellness", "health"],
         institutionId,

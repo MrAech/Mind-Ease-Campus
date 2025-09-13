@@ -118,7 +118,7 @@
   }
   html {
     /* scale rem-based sizing globally by 1.5x */
-    font-size: 150%;
+    font-size: 100%;
   }
 
   body {

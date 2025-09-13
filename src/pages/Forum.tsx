@@ -195,7 +195,7 @@ function ForumPostItem({
   institutionId,
   likePost,
   createPost,
-  currentUserName,
+  // currentUserName,
 }: {
   post: any;
   institutionId: string;

@@ -64,13 +64,58 @@ export const setRole = mutation({
   handler: async (ctx, { userId, role }) => {
     const me = await getCurrentUser(ctx);
     if (!me || me.role !== ROLES.ADMIN) {
-      throw new Error("Unauthorized");
+      throw new Error("Unauthorized: admin role required to change user roles");
     }
     const user = await ctx.db.get(userId);
     if (!user) {
       throw new Error("User not found");
     }
     await ctx.db.patch(userId, { role });
+
+    // If promoting to counsellor, ensure a counsellor profile exists so
+    // front-end redirects to /counsellor won't hit missing-data errors.
+    if (role === ROLES.COUNSELLOR) {
+      const existing = await ctx.db
+        .query("counsellors")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .first();
+      if (!existing) {
+        // Use the user's institution if available, otherwise try to reuse the
+        // admin's institution or find/create a default one so the counsellor
+        // row has a valid non-null institution id (schema requires it).
+        let finalInstitutionId = user.institutionId ?? me.institutionId ?? null;
+        if (!finalInstitutionId) {
+          const anyInst = await ctx.db.query("institutions").first();
+          if (anyInst) finalInstitutionId = anyInst._id;
+          else
+            finalInstitutionId = await ctx.db.insert("institutions", {
+              name: "Default Institution",
+              domain: "example.edu",
+              settings: { supportedLanguages: ["en"] },
+              isActive: true,
+            });
+        }
+
+        await ctx.db.insert("counsellors", {
+          userId: userId,
+          institutionId: finalInstitutionId,
+          specialization: [],
+          bio: "",
+          qualifications: "",
+          availability: {
+            monday: [],
+            tuesday: [],
+            wednesday: [],
+            thursday: [],
+            friday: [],
+            saturday: [],
+            sunday: [],
+          },
+          isActive: true,
+        });
+      }
+    }
+
     return { success: true };
   },
 });
@@ -134,9 +179,22 @@ export const ensureInitialRoles = mutation({
         .withIndex("by_user", (q) => q.eq("userId", me._id))
         .first();
       if (!existing) {
+        let finalInstitutionId = institutionId;
+        if (!finalInstitutionId) {
+          const anyInst = await ctx.db.query("institutions").first();
+          if (anyInst) finalInstitutionId = anyInst._id;
+          else
+            finalInstitutionId = await ctx.db.insert("institutions", {
+              name: "Default Institution",
+              domain: "example.edu",
+              settings: { supportedLanguages: ["en"] },
+              isActive: true,
+            });
+        }
+
         await ctx.db.insert("counsellors", {
           userId: me._id,
-          institutionId: institutionId as any,
+          institutionId: finalInstitutionId,
           specialization: [],
           bio: "",
           qualifications: "",
@@ -154,11 +212,14 @@ export const ensureInitialRoles = mutation({
       }
     }
 
-    // Assign STUDENT to any other email if not already set
+    // Assign STUDENT to any other email only if role is not already set.
+    // Previously this would overwrite roles on every login which caused
+    // admin-promoted roles to be reverted back to student. Only set a
+    // default role when the user's role is null/undefined.
     if (
       (me.email ?? "") !== ADMIN_EMAIL &&
       (me.email ?? "") !== COUNSELLOR_EMAIL &&
-      me.role !== ROLES.STUDENT
+      me.role == null
     ) {
       await ctx.db.patch(me._id, { role: ROLES.STUDENT });
       changed = true;
