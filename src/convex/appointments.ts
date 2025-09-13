@@ -692,3 +692,196 @@ export const listAppointmentsForCounsellorDate = query({
     return appts;
   },
 });
+
+/**
+ * In-session chat: send a message on an appointment.
+ * Allowed: student (owner), counsellor assigned to appointment, admin.
+ * Messages are stored in appointment.chatMessages array.
+ */
+export const sendChatMessage = mutation({
+  args: {
+    appointmentId: v.id("appointments"),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+
+    const appt = await ctx.db.get(args.appointmentId);
+    if (!appt) throw new Error("Appointment not found");
+
+    // Resolve counsellor ownership if needed
+    let isCounsellorOwner = false;
+    if (user.role === "counsellor") {
+      const counsellor = await ctx.db
+        .query("counsellors")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .first();
+      if (counsellor && String(counsellor._id) === String(appt.counsellorId)) {
+        isCounsellorOwner = true;
+      }
+    }
+
+    // Authorization: student owner, counsellor owner, or admin
+    if (
+      !(user.role === "student" && String(appt.studentId) === String(user._id)) &&
+      !isCounsellorOwner &&
+      user.role !== "admin"
+    ) {
+      throw new Error("Unauthorized");
+    }
+
+    const now = Date.now();
+    const msg = {
+      fromUserId: user._id,
+      fromName: user.name ?? null,
+      role: user.role ?? null,
+      content: args.content,
+      createdAt: now,
+    };
+
+    const existingMessages = (appt as any).chatMessages ?? [];
+    const updated = [...existingMessages, msg];
+    
+    // Cast patch to any because chatMessages is an extension field not yet present
+    // in the generated Convex typings.
+    await ctx.db.patch(args.appointmentId, { chatMessages: updated } as any);
+    
+    return { success: true, message: msg };
+  },
+});
+
+/**
+ * List chat messages for an appointment.
+ * Authorization same as sendChatMessage.
+ */
+export const listChatMessages = query({
+  args: { appointmentId: v.id("appointments") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+
+    const appt = await ctx.db.get(args.appointmentId);
+    if (!appt) throw new Error("Appointment not found");
+
+    let isCounsellorOwner = false;
+    if (user.role === "counsellor") {
+      const counsellor = await ctx.db
+        .query("counsellors")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .first();
+      if (counsellor && String(counsellor._id) === String(appt.counsellorId)) {
+        isCounsellorOwner = true;
+      }
+    }
+
+    if (
+      !(user.role === "student" && String(appt.studentId) === String(user._id)) &&
+      !isCounsellorOwner &&
+      user.role !== "admin"
+    ) {
+      throw new Error("Unauthorized");
+    }
+
+    return (appt as any).chatMessages ?? [];
+  },
+});
+
+/**
+ * Student ends the chat session. Sets chatEndedByStudent flag so counsellor
+ * can submit their post-chat form.
+ */
+export const endChatByStudent = mutation({
+  args: { appointmentId: v.id("appointments") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+
+    const appt = await ctx.db.get(args.appointmentId);
+    if (!appt) throw new Error("Appointment not found");
+
+    if (!(user.role === "student" && String(appt.studentId) === String(user._id))) {
+      throw new Error("Unauthorized");
+    }
+    
+    // Append a system message and set chat-ended flags so the counsellor sees it.
+    const existingMessages = (appt as any).chatMessages ?? [];
+    const now = Date.now();
+    const systemMsg = {
+      fromUserId: user._id,
+      fromName: user.name ?? null,
+      role: "system",
+      content: "Student ended the chat",
+      createdAt: now,
+    };
+    const updatedMessages = [...existingMessages, systemMsg];
+
+    // Patch with `as any` to avoid TypeScript errors until schema is updated.
+    await ctx.db.patch(args.appointmentId, {
+      chatEndedByStudent: true,
+      chatEndedAt: now,
+      // mark a lightweight audit entry
+      chatEndedBy: user._id,
+      chatMessages: updatedMessages,
+    } as any);
+
+    return { success: true };
+  },
+});
+
+/**
+ * Counsellor submits post-chat form after student ends chat.
+ * Allowed: counsellor owner, admin.
+ * Stores counsellorPostSessionForm and marks session completed.
+ */
+export const submitPostChatForm = mutation({
+  args: {
+    appointmentId: v.id("appointments"),
+    sessionNotes: v.optional(v.string()),
+    diagnosis: v.optional(v.string()),
+    followUp: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+
+    const appt = await ctx.db.get(args.appointmentId);
+    if (!appt) throw new Error("Appointment not found");
+
+    // Ensure chat was ended by student
+    if (!((appt as any).chatEndedByStudent === true)) {
+      throw new Error("Student has not ended the chat");
+    }
+
+    // Check counsellor ownership or admin
+    let isCounsellorOwner = false;
+    if (user.role === "counsellor") {
+      const counsellor = await ctx.db
+        .query("counsellors")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .first();
+      if (counsellor && String(counsellor._id) === String(appt.counsellorId)) {
+        isCounsellorOwner = true;
+      }
+    }
+
+    if (!isCounsellorOwner && user.role !== "admin") {
+      throw new Error("Unauthorized");
+    }
+
+    const patch: any = {
+      counsellorPostSessionForm: {
+        sessionNotes: args.sessionNotes ?? null,
+        diagnosis: args.diagnosis ?? null,
+        followUp: args.followUp ?? null,
+        submittedBy: user._id,
+        submittedAt: Date.now(),
+      },
+      status: "completed",
+    };
+
+    await ctx.db.patch(args.appointmentId, patch);
+
+    return { success: true };
+  },
+});

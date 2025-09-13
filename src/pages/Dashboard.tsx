@@ -60,6 +60,7 @@ export default function Dashboard() {
   // Add: local flag to suppress queries while signing out
   const [signingOut, setSigningOut] = React.useState(false);
   const [showAiChat, setShowAiChat] = React.useState(false);
+  const [chatAppointmentId, setChatAppointmentId] = React.useState<string | null>(null);
 
   // Auto-open booking drawer when ?book=1 is in the URL
   React.useEffect(() => {
@@ -496,6 +497,13 @@ export default function Dashboard() {
       </div>
 
       <AiChatDialog open={showAiChat} onOpenChange={setShowAiChat} />
+      <AppointmentChatDialog
+        open={Boolean(chatAppointmentId)}
+        onOpenChange={(v: boolean) => {
+          if (!v) setChatAppointmentId(null);
+        }}
+        appointmentId={chatAppointmentId}
+      />
 
       <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
         {/* Quick Actions */}
@@ -644,6 +652,14 @@ export default function Dashboard() {
                             />
                           </DialogContent>
                         </Dialog>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full sm:w-auto"
+                          onClick={() => setChatAppointmentId(appointment._id)}
+                        >
+                          Enter Chat
+                        </Button>
                       </div>
                     ))}
                     <Button
@@ -1150,6 +1166,15 @@ export default function Dashboard() {
                           sessions.
                         </div>
                       )}
+                      <div className="mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setChatAppointmentId(appointment._id)}
+                        >
+                          Enter Chat
+                        </Button>
+                      </div>
                     </div>
                   );
                 })
@@ -1759,6 +1784,127 @@ function AiChatDialog({
               disabled={pending || input.trim().length === 0}
             >
               Send
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AppointmentChatDialog({
+  open,
+  onOpenChange,
+  appointmentId,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  appointmentId: string | null;
+}) {
+  // Query messages for the appointment when appointmentId is present
+  const messages = useQuery(
+    api.appointments.listChatMessages,
+    appointmentId ? { appointmentId: appointmentId as any } : "skip",
+  ) ?? [];
+
+  const sendMessage = useMutation(api.appointments.sendChatMessage);
+  const endChatByStudent = useMutation(api.appointments.endChatByStudent);
+
+  const [input, setInput] = React.useState("");
+  const [pending, setPending] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) {
+      setInput("");
+      setPending(false);
+    }
+  }, [open]);
+
+  const doSend = async () => {
+    const text = input.trim();
+    if (!text || !appointmentId || pending) return;
+    setPending(true);
+    try {
+      await sendMessage({ appointmentId: appointmentId as any, content: text });
+      setInput("");
+    } catch (e: any) {
+      toast(e?.message ?? "Failed to send message.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const doEndChat = async () => {
+    if (!appointmentId) return;
+    setPending(true);
+    try {
+      await endChatByStudent({ appointmentId: appointmentId as any });
+      toast("You ended the chat. The counsellor will be notified to submit the post-chat form.");
+      onOpenChange(false);
+    } catch (e: any) {
+      toast(e?.message ?? "Failed to end chat.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Session Chat</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-3">
+          <div className="h-64 overflow-y-auto rounded border p-3 bg-muted/30 space-y-3">
+            {messages.length === 0 && (
+              <div className="text-center text-muted-foreground">No messages yet.</div>
+            )}
+            {messages.map((m: any, i: number) => (
+              <div key={i} className={m.fromUserId === (typeof window !== "undefined" ? (window as any).__convex_user_id : undefined) ? "text-right" : "text-left"}>
+                <div
+                  className={
+                    "inline-block px-3 py-2 rounded-lg max-w-[85%] whitespace-pre-wrap " +
+                    (m.role === "student" ? "bg-primary text-primary-foreground" : "bg-background border")
+                  }
+                >
+                  <div className="text-xs text-muted-foreground mb-1">
+                    {m.fromName ?? (m.role === "counsellor" ? "Counsellor" : "Student")}
+                  </div>
+                  {m.content}
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    {m.createdAt ? new Date(m.createdAt).toLocaleTimeString() : ""}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {pending && (
+              <div className="text-left">
+                <div className="inline-block px-3 py-2 rounded-lg bg-background border text-muted-foreground">
+                  Sending…
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Type your message…"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  doSend();
+                }
+              }}
+              disabled={pending}
+            />
+            <Button onClick={doSend} disabled={pending || input.trim().length === 0}>
+              Send
+            </Button>
+            <Button variant="destructive" onClick={doEndChat} disabled={pending}>
+              End Chat
             </Button>
           </div>
         </div>
