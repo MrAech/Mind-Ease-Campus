@@ -17,10 +17,7 @@ export default function NotFound() {
               <p className="text-lg text-gray-600">Page Not Found</p>
               {/* Return to Home ie Dashboard */}
               <div className="mt-6">
-                <a
-                  href="/dashboard"
-                  className="text-primary hover:underline"
-                >
+                <a href="/dashboard" className="text-primary hover:underline">
                   Return to Dashboard
                 </a>
               </div>

@@ -3,7 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useEffect, useState } from "react";
@@ -30,15 +35,21 @@ export default function CounsellorPage() {
       { sessionNotes: string; diagnosis: string; followUp: string }
     >
   >({});
-    // Track whether counsellor wants to schedule a follow-up for each appointment
-    const [scheduleFollowUp, setScheduleFollowUp] = useState<Record<string, boolean>>({});
-    const [followUpDate, setFollowUpDate] = useState<Record<string, string>>({});
-    const [followUpTime, setFollowUpTime] = useState<Record<string, string>>({});
-    // Chat state for counsellor to enter session chat
-    const [chatAppointmentId, setChatAppointmentId] = useState<string | null>(null);
+  // Track whether counsellor wants to schedule a follow-up for each appointment
+  const [scheduleFollowUp, setScheduleFollowUp] = useState<
+    Record<string, boolean>
+  >({});
+  const [followUpDate, setFollowUpDate] = useState<Record<string, string>>({});
+  const [followUpTime, setFollowUpTime] = useState<Record<string, string>>({});
+  // Chat state for counsellor to enter session chat
+  const [chatAppointmentId, setChatAppointmentId] = useState<string | null>(
+    null,
+  );
 
-    // Partition and sort appointments: upcoming/scheduled first (by date asc), then past/completed
-    const sortedAppointments = (appointments ?? []).slice().sort((a: any, b: any) => {
+  // Partition and sort appointments: upcoming/scheduled first (by date asc), then past/completed
+  const sortedAppointments = (appointments ?? [])
+    .slice()
+    .sort((a: any, b: any) => {
       const now = Date.now();
       const ta = new Date(a.scheduledDate).getTime();
       const tb = new Date(b.scheduledDate).getTime();
@@ -70,142 +81,220 @@ export default function CounsellorPage() {
             </div>
           ) : (
             sortedAppointments.map((apt: any) => {
-                // const upcoming =
-                //   new Date(apt.scheduledDate).getTime() >= Date.now();
-                const id = String(apt._id);
+              // const upcoming =
+              //   new Date(apt.scheduledDate).getTime() >= Date.now();
+              const id = String(apt._id);
 
-                const currentEdit = editing[id] ?? {
-                  sessionNotes: "",
-                  diagnosis: "",
-                  followUp: "",
-                };
+              const currentEdit = editing[id] ?? {
+                sessionNotes: "",
+                diagnosis: "",
+                followUp: "",
+              };
 
-                return (
-                  <div
-                    key={apt._id}
-                    className="p-4 rounded-lg border bg-muted/40 space-y-3"
-                  >
-                    <div className="flex items-start justify-between">
+              return (
+                <div
+                  key={apt._id}
+                  className="p-4 rounded-lg border bg-muted/40 space-y-3"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="font-medium">
+                        {apt.student?.name ?? "Student"}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {new Date(apt.scheduledDate).toLocaleDateString()} at{" "}
+                        {apt.timeSlot} • Status: {apt.status}
+                      </div>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      {apt.student?.email}
+                    </div>
+                  </div>
+
+                  {/* Show recent screenings for context */}
+                  {apt.screeningSummary && (
+                    <div className="p-3 rounded-md bg-background/50 border space-y-2">
+                      <div className="font-semibold text-sm">
+                        Latest Screening Summary
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {apt.screeningSummary.toolType?.toUpperCase()} • Score:{" "}
+                        {apt.screeningSummary.score} •{" "}
+                        {apt.screeningSummary.riskLevel}
+                      </div>
+                      {apt.screeningSummary.recommendations && (
+                        <div className="text-xs text-muted-foreground">
+                          {apt.screeningSummary.recommendations.join(" • ")}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {apt.screenings && apt.screenings.length > 0 && (
+                    <div className="p-3 rounded-md bg-background/50 border space-y-2">
+                      <div className="font-semibold text-sm">
+                        Recent Screenings
+                      </div>
+                      {apt.screenings.slice(0, 3).map((s: any) => (
+                        <div
+                          key={s._id}
+                          className="text-xs text-muted-foreground"
+                        >
+                          {s.toolType.toUpperCase()} • Score: {s.score} •{" "}
+                          {s.riskLevel}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Show previous sessions */}
+                  {apt.previousSessions && apt.previousSessions.length > 0 && (
+                    <div className="p-3 rounded-md bg-background/50 border space-y-2">
+                      <div className="font-semibold text-sm">
+                        Previous Sessions
+                      </div>
+                      {apt.previousSessions.map((p: any) => (
+                        <div
+                          key={p._id}
+                          className="text-xs text-muted-foreground"
+                        >
+                          {new Date(p.scheduledDate).toLocaleDateString()} at{" "}
+                          {p.timeSlot} • {p.status}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Session result form */}
+                  {apt.status === "completed" ? (
+                    <div className="flex items-center justify-between p-3 rounded-md bg-background/30 border">
                       <div>
                         <div className="font-medium">
                           {apt.student?.name ?? "Student"}
                         </div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           {new Date(apt.scheduledDate).toLocaleDateString()} at{" "}
-                          {apt.timeSlot} • Status: {apt.status}
+                          {apt.timeSlot} • {apt.status}
                         </div>
                       </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        {apt.student?.email}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => setChatAppointmentId(String(apt._id))}
+                        >
+                          View Chat
+                        </Button>
                       </div>
                     </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label>Session Notes</Label>
+                      <Textarea
+                        value={currentEdit.sessionNotes}
+                        onChange={(e) =>
+                          setEditing((prev) => ({
+                            ...prev,
+                            [id]: {
+                              ...currentEdit,
+                              sessionNotes: e.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Summary of session, observations, and next steps"
+                      />
 
-                    {/* Show recent screenings for context */}
-                    {apt.screeningSummary && (
-                      <div className="p-3 rounded-md bg-background/50 border space-y-2">
-                        <div className="font-semibold text-sm">
-                          Latest Screening Summary
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {apt.screeningSummary.toolType?.toUpperCase()} •
-                          Score: {apt.screeningSummary.score} •{" "}
-                          {apt.screeningSummary.riskLevel}
-                        </div>
-                        {apt.screeningSummary.recommendations && (
-                          <div className="text-xs text-muted-foreground">
-                            {apt.screeningSummary.recommendations.join(" • ")}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {apt.screenings && apt.screenings.length > 0 && (
-                      <div className="p-3 rounded-md bg-background/50 border space-y-2">
-                        <div className="font-semibold text-sm">
-                          Recent Screenings
-                        </div>
-                        {apt.screenings.slice(0, 3).map((s: any) => (
-                          <div
-                            key={s._id}
-                            className="text-xs text-muted-foreground"
-                          >
-                            {s.toolType.toUpperCase()} • Score: {s.score} •{" "}
-                            {s.riskLevel}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Show previous sessions */}
-                    {apt.previousSessions &&
-                      apt.previousSessions.length > 0 && (
-                        <div className="p-3 rounded-md bg-background/50 border space-y-2">
-                          <div className="font-semibold text-sm">
-                            Previous Sessions
-                          </div>
-                          {apt.previousSessions.map((p: any) => (
-                            <div
-                              key={p._id}
-                              className="text-xs text-muted-foreground"
-                            >
-                              {new Date(p.scheduledDate).toLocaleDateString()}{" "}
-                              at {p.timeSlot} • {p.status}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                    {/* Session result form */}
-                    {apt.status === "completed" ? (
-                      <div className="flex items-center justify-between p-3 rounded-md bg-background/30 border">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         <div>
-                          <div className="font-medium">{apt.student?.name ?? "Student"}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(apt.scheduledDate).toLocaleDateString()} at {apt.timeSlot} • {apt.status}
-                          </div>
+                          <Label>Diagnosis (optional)</Label>
+                          <Input
+                            value={currentEdit.diagnosis}
+                            onChange={(e) =>
+                              setEditing((prev) => ({
+                                ...prev,
+                                [id]: {
+                                  ...currentEdit,
+                                  diagnosis: e.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="Short diagnostic note"
+                          />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" onClick={() => setChatAppointmentId(String(apt._id))}>
-                            View Chat
-                          </Button>
+                        <div>
+                          <Label>Follow-up</Label>
+                          <Input
+                            value={currentEdit.followUp}
+                            onChange={(e) =>
+                              setEditing((prev) => ({
+                                ...prev,
+                                [id]: {
+                                  ...currentEdit,
+                                  followUp: e.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="Recommended follow-up actions or referrals"
+                          />
                         </div>
                       </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Label>Session Notes</Label>
-                        <Textarea
-                          value={currentEdit.sessionNotes}
-                          onChange={(e) =>
-                            setEditing((prev) => ({
-                              ...prev,
-                              [id]: {
-                                ...currentEdit,
-                                sessionNotes: e.target.value,
-                              },
-                            }))
-                          }
-                          placeholder="Summary of session, observations, and next steps"
-                        />
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <div>
-                            <Label>Diagnosis (optional)</Label>
-                            <Input
-                              value={currentEdit.diagnosis}
-                              onChange={(e) =>
-                                setEditing((prev) => ({
-                                  ...prev,
-                                  [id]: {
-                                    ...currentEdit,
-                                    diagnosis: e.target.value,
-                                  },
-                                }))
-                              }
-                              placeholder="Short diagnostic note"
-                            />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                          <Label>Schedule follow-up?</Label>
+                          <div className="flex items-center gap-3 mt-2">
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name={`follow-${id}`}
+                                checked={!scheduleFollowUp[id]}
+                                onChange={() =>
+                                  setScheduleFollowUp((prev) => ({
+                                    ...prev,
+                                    [id]: false,
+                                  }))
+                                }
+                              />
+                              No
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name={`follow-${id}`}
+                                checked={!!scheduleFollowUp[id]}
+                                onChange={() =>
+                                  setScheduleFollowUp((prev) => ({
+                                    ...prev,
+                                    [id]: true,
+                                  }))
+                                }
+                              />
+                              Yes
+                            </label>
                           </div>
-                          <div>
-                            <Label>Follow-up</Label>
+
+                          {scheduleFollowUp[id] ? (
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              <Input
+                                type="date"
+                                value={followUpDate[id] ?? ""}
+                                onChange={(e) =>
+                                  setFollowUpDate((prev) => ({
+                                    ...prev,
+                                    [id]: e.target.value,
+                                  }))
+                                }
+                              />
+                              <Input
+                                type="time"
+                                value={followUpTime[id] ?? ""}
+                                onChange={(e) =>
+                                  setFollowUpTime((prev) => ({
+                                    ...prev,
+                                    [id]: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                          ) : (
                             <Input
                               value={currentEdit.followUp}
                               onChange={(e) =>
@@ -219,110 +308,38 @@ export default function CounsellorPage() {
                               }
                               placeholder="Recommended follow-up actions or referrals"
                             />
-                          </div>
+                          )}
                         </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <div>
-                              <Label>Schedule follow-up?</Label>
-                              <div className="flex items-center gap-3 mt-2">
-                                <label className="flex items-center gap-2">
-                                  <input
-                                    type="radio"
-                                    name={`follow-${id}`}
-                                    checked={!scheduleFollowUp[id]}
-                                    onChange={() =>
-                                      setScheduleFollowUp((prev) => ({
-                                        ...prev,
-                                        [id]: false,
-                                      }))
-                                    }
-                                  />
-                                  No
-                                </label>
-                                <label className="flex items-center gap-2">
-                                  <input
-                                    type="radio"
-                                    name={`follow-${id}`}
-                                    checked={!!scheduleFollowUp[id]}
-                                    onChange={() =>
-                                      setScheduleFollowUp((prev) => ({
-                                        ...prev,
-                                        [id]: true,
-                                      }))
-                                    }
-                                  />
-                                  Yes
-                                </label>
-                              </div>
+                      </div>
 
-                              {scheduleFollowUp[id] ? (
-                                <div className="mt-2 grid grid-cols-2 gap-2">
-                                  <Input
-                                    type="date"
-                                    value={followUpDate[id] ?? ""}
-                                    onChange={(e) =>
-                                      setFollowUpDate((prev) => ({
-                                        ...prev,
-                                        [id]: e.target.value,
-                                      }))
-                                    }
-                                  />
-                                  <Input
-                                    type="time"
-                                    value={followUpTime[id] ?? ""}
-                                    onChange={(e) =>
-                                      setFollowUpTime((prev) => ({
-                                        ...prev,
-                                        [id]: e.target.value,
-                                      }))
-                                    }
-                                  />
-                                </div>
-                              ) : (
-                                <Input
-                                  value={currentEdit.followUp}
-                                  onChange={(e) =>
-                                    setEditing((prev) => ({
-                                      ...prev,
-                                      [id]: {
-                                        ...currentEdit,
-                                        followUp: e.target.value,
-                                      },
-                                    }))
-                                  }
-                                  placeholder="Recommended follow-up actions or referrals"
-                                />
-                              )}
-                            </div>
-                          </div>
-
-                        <div className="flex gap-2 justify-end">
-                          <Button
-                            variant="outline"
-                            onClick={() =>
-                              setEditing((prev) => ({
-                                ...prev,
-                                [id]: {
-                                  sessionNotes: "",
-                                  diagnosis: "",
-                                  followUp: "",
-                                },
-                              }))
-                            }
-                          >
-                            Reset
-                          </Button>
-                          <Button
-                            variant="outline"
-                            onClick={() => setChatAppointmentId(String(apt._id))}
-                          >
-                            Enter Chat
-                          </Button>
-                          <Button
-                            onClick={async () => {
-                              try {
-                                // prepare followUp payload
-                                const followUpPayload: string | undefined = scheduleFollowUp[id]
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            setEditing((prev) => ({
+                              ...prev,
+                              [id]: {
+                                sessionNotes: "",
+                                diagnosis: "",
+                                followUp: "",
+                              },
+                            }))
+                          }
+                        >
+                          Reset
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setChatAppointmentId(String(apt._id))}
+                        >
+                          Enter Chat
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            try {
+                              // prepare followUp payload
+                              const followUpPayload: string | undefined =
+                                scheduleFollowUp[id]
                                   ? JSON.stringify({
                                       proposed: true,
                                       date: followUpDate[id] ?? null,
@@ -330,59 +347,68 @@ export default function CounsellorPage() {
                                       note: currentEdit.followUp ?? null,
                                     })
                                   : currentEdit.followUp
-                                  ? String(currentEdit.followUp)
-                                  : undefined;
-          
-                                await addSessionResult({
-                                  appointmentId: apt._id as any,
-                                  sessionNotes:
-                                    currentEdit.sessionNotes || undefined,
-                                  diagnosis: currentEdit.diagnosis || undefined,
-                                  followUp: followUpPayload || undefined,
-                                });
-                                toast("Session saved and marked completed");
-                                setEditing((prev) => ({
-                                  ...prev,
-                                  [id]: {
-                                    sessionNotes: "",
-                                    diagnosis: "",
-                                    followUp: "",
-                                  },
-                                }));
-                                // clear follow-up scheduling fields
-                                setScheduleFollowUp((prev) => ({ ...prev, [id]: false }));
-                                setFollowUpDate((prev) => ({ ...prev, [id]: "" }));
-                                setFollowUpTime((prev) => ({ ...prev, [id]: "" }));
-                              } catch (e: any) {
-                                toast(e?.message ?? "Failed to save session");
-                              }
-                            }}
-                          >
-                            Save & Complete
-                          </Button>
-                        </div>
-                      </div>
-                    )}
+                                    ? String(currentEdit.followUp)
+                                    : undefined;
 
-                    {apt.sessionAudit && apt.sessionAudit.length > 0 && (
-                      <div className="pt-3 border-t mt-3 text-xs text-muted-foreground space-y-1">
-                        <div className="font-semibold">Activity Log</div>
-                        {apt.sessionAudit.map((a: any, i: number) => (
-                          <div key={i}>
-                            <div>
-                              {new Date(a.when).toLocaleString()} •{" "}
-                              {a.byName || a.by} • {a.action}
-                            </div>
-                            <div className="text-xs">
-                              Notes: {a.changes?.sessionNotes ?? "—"}
-                            </div>
-                          </div>
-                        ))}
+                              await addSessionResult({
+                                appointmentId: apt._id as any,
+                                sessionNotes:
+                                  currentEdit.sessionNotes || undefined,
+                                diagnosis: currentEdit.diagnosis || undefined,
+                                followUp: followUpPayload || undefined,
+                              });
+                              toast("Session saved and marked completed");
+                              setEditing((prev) => ({
+                                ...prev,
+                                [id]: {
+                                  sessionNotes: "",
+                                  diagnosis: "",
+                                  followUp: "",
+                                },
+                              }));
+                              // clear follow-up scheduling fields
+                              setScheduleFollowUp((prev) => ({
+                                ...prev,
+                                [id]: false,
+                              }));
+                              setFollowUpDate((prev) => ({
+                                ...prev,
+                                [id]: "",
+                              }));
+                              setFollowUpTime((prev) => ({
+                                ...prev,
+                                [id]: "",
+                              }));
+                            } catch (e: any) {
+                              toast(e?.message ?? "Failed to save session");
+                            }
+                          }}
+                        >
+                          Save & Complete
+                        </Button>
                       </div>
-                    )}
-                  </div>
-                );
-              })
+                    </div>
+                  )}
+
+                  {apt.sessionAudit && apt.sessionAudit.length > 0 && (
+                    <div className="pt-3 border-t mt-3 text-xs text-muted-foreground space-y-1">
+                      <div className="font-semibold">Activity Log</div>
+                      {apt.sessionAudit.map((a: any, i: number) => (
+                        <div key={i}>
+                          <div>
+                            {new Date(a.when).toLocaleString()} •{" "}
+                            {a.byName || a.by} • {a.action}
+                          </div>
+                          <div className="text-xs">
+                            Notes: {a.changes?.sessionNotes ?? "—"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
         </CardContent>
       </Card>
@@ -407,10 +433,11 @@ function AppointmentChatDialog({
   onOpenChange: (v: boolean) => void;
   appointmentId: string | null;
 }) {
-  const messages = useQuery(
-    api.appointments.listChatMessages,
-    appointmentId ? { appointmentId: appointmentId as any } : "skip",
-  ) ?? [];
+  const messages =
+    useQuery(
+      api.appointments.listChatMessages,
+      appointmentId ? { appointmentId: appointmentId as any } : "skip",
+    ) ?? [];
 
   const sendMessage = useMutation(api.appointments.sendChatMessage);
   const endChatByStudent = useMutation(api.appointments.endChatByStudent);
@@ -464,22 +491,39 @@ function AppointmentChatDialog({
         <div className="flex flex-col gap-3">
           <div className="h-64 overflow-y-auto rounded border p-3 bg-muted/30 space-y-3">
             {messages.length === 0 && (
-              <div className="text-center text-muted-foreground">No messages yet.</div>
+              <div className="text-center text-muted-foreground">
+                No messages yet.
+              </div>
             )}
             {messages.map((m: any, i: number) => (
-              <div key={i} className={m.fromUserId === (typeof window !== "undefined" ? (window as any).__convex_user_id : undefined) ? "text-right" : "text-left"}>
+              <div
+                key={i}
+                className={
+                  m.fromUserId ===
+                  (typeof window !== "undefined"
+                    ? (window as any).__convex_user_id
+                    : undefined)
+                    ? "text-right"
+                    : "text-left"
+                }
+              >
                 <div
                   className={
                     "inline-block px-3 py-2 rounded-lg max-w-[85%] whitespace-pre-wrap " +
-                    (m.role === "student" ? "bg-primary text-primary-foreground" : "bg-background border")
+                    (m.role === "student"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background border")
                   }
                 >
                   <div className="text-xs text-muted-foreground mb-1">
-                    {m.fromName ?? (m.role === "counsellor" ? "Counsellor" : "Student")}
+                    {m.fromName ??
+                      (m.role === "counsellor" ? "Counsellor" : "Student")}
                   </div>
                   {m.content}
                   <div className="text-[10px] text-muted-foreground mt-1">
-                    {m.createdAt ? new Date(m.createdAt).toLocaleTimeString() : ""}
+                    {m.createdAt
+                      ? new Date(m.createdAt).toLocaleTimeString()
+                      : ""}
                   </div>
                 </div>
               </div>
@@ -506,10 +550,17 @@ function AppointmentChatDialog({
               }}
               disabled={pending}
             />
-            <Button onClick={doSend} disabled={pending || input.trim().length === 0}>
+            <Button
+              onClick={doSend}
+              disabled={pending || input.trim().length === 0}
+            >
               Send
             </Button>
-            <Button variant="destructive" onClick={doEndChat} disabled={pending}>
+            <Button
+              variant="destructive"
+              onClick={doEndChat}
+              disabled={pending}
+            >
               End Chat
             </Button>
           </div>

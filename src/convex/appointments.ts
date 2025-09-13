@@ -8,18 +8,17 @@ import { action } from "./_generated/server";
 // Helper: parse an appointment's scheduledDate and optional timeSlot into a local Date
 function getAppointmentDate(appointment: any) {
   try {
-    const dateParts = String(appointment.scheduledDate || "").split("-").map(
-      (p) => Number(p),
-    );
-    if (
-      dateParts.length === 3 &&
-      dateParts.every((n) => !Number.isNaN(n))
-    ) {
+    const dateParts = String(appointment.scheduledDate || "")
+      .split("-")
+      .map((p) => Number(p));
+    if (dateParts.length === 3 && dateParts.every((n) => !Number.isNaN(n))) {
       const [y, m, d] = dateParts;
       let hour = 0;
       let minute = 0;
       if (appointment.timeSlot) {
-        const t = String(appointment.timeSlot).split(":").map((p) => Number(p));
+        const t = String(appointment.timeSlot)
+          .split(":")
+          .map((p) => Number(p));
         if (t.length >= 2 && !Number.isNaN(t[0]) && !Number.isNaN(t[1])) {
           hour = t[0];
           minute = t[1];
@@ -442,7 +441,9 @@ export const addSessionResult = mutation({
       diagnosis: args.diagnosis,
       status: "completed",
       sessionAudit: newAudit as any,
-      screeningSummary: (screeningSummary ?? (appointment as any).screeningSummary ?? null) as any,
+      screeningSummary: (screeningSummary ??
+        (appointment as any).screeningSummary ??
+        null) as any,
     };
 
     try {
@@ -493,11 +494,17 @@ export const acceptFollowUp = mutation({
 
     const proposal = (appointment as any).proposedFollowUp;
     if (!proposal) throw new Error("No follow-up proposed");
-    if (proposal.accepted === true) throw new Error("Follow-up already accepted");
+    if (proposal.accepted === true)
+      throw new Error("Follow-up already accepted");
 
     // Update scheduledDate/timeSlot only if proposal contains them
     const patches: any = {
-      proposedFollowUp: { ...proposal, accepted: true, acceptedAt: Date.now(), acceptedBy: user._id } as any,
+      proposedFollowUp: {
+        ...proposal,
+        accepted: true,
+        acceptedAt: Date.now(),
+        acceptedBy: user._id,
+      } as any,
     };
     if (proposal.date) patches.scheduledDate = proposal.date;
     if (proposal.timeSlot) patches.timeSlot = proposal.timeSlot;
@@ -525,10 +532,17 @@ export const rejectFollowUp = mutation({
 
     const proposal = (appointment as any).proposedFollowUp;
     if (!proposal) throw new Error("No follow-up proposed");
-    if (proposal.accepted === false) throw new Error("Follow-up already rejected");
+    if (proposal.accepted === false)
+      throw new Error("Follow-up already rejected");
 
     const patches: any = {
-      proposedFollowUp: { ...proposal, accepted: false, rejectedAt: Date.now(), rejectedBy: user._id, rejectionReason: args.reason ?? null } as any,
+      proposedFollowUp: {
+        ...proposal,
+        accepted: false,
+        rejectedAt: Date.now(),
+        rejectedBy: user._id,
+        rejectionReason: args.reason ?? null,
+      } as any,
     };
 
     await ctx.db.patch(args.appointmentId, patches as any);
@@ -674,13 +688,18 @@ export const listAppointmentsForCounsellorDate = query({
     if (!counsellor) throw new Error("Counsellor not found");
 
     // Allow admins or users from the same institution to view booked slots
-    if (user.role !== "admin" && counsellor.institutionId !== user.institutionId) {
+    if (
+      user.role !== "admin" &&
+      counsellor.institutionId !== user.institutionId
+    ) {
       throw new Error("Unauthorized");
     }
 
     const appts = await ctx.db
       .query("appointments")
-      .withIndex("by_counsellor", (q) => q.eq("counsellorId", args.counsellorId))
+      .withIndex("by_counsellor", (q) =>
+        q.eq("counsellorId", args.counsellorId),
+      )
       .filter((q) =>
         q.and(
           q.eq(q.field("scheduledDate"), args.scheduledDate),
@@ -724,7 +743,9 @@ export const sendChatMessage = mutation({
 
     // Authorization: student owner, counsellor owner, or admin
     if (
-      !(user.role === "student" && String(appt.studentId) === String(user._id)) &&
+      !(
+        user.role === "student" && String(appt.studentId) === String(user._id)
+      ) &&
       !isCounsellorOwner &&
       user.role !== "admin"
     ) {
@@ -742,11 +763,11 @@ export const sendChatMessage = mutation({
 
     const existingMessages = (appt as any).chatMessages ?? [];
     const updated = [...existingMessages, msg];
-    
+
     // Cast patch to any because chatMessages is an extension field not yet present
     // in the generated Convex typings.
     await ctx.db.patch(args.appointmentId, { chatMessages: updated } as any);
-    
+
     return { success: true, message: msg };
   },
 });
@@ -776,7 +797,9 @@ export const listChatMessages = query({
     }
 
     if (
-      !(user.role === "student" && String(appt.studentId) === String(user._id)) &&
+      !(
+        user.role === "student" && String(appt.studentId) === String(user._id)
+      ) &&
       !isCounsellorOwner &&
       user.role !== "admin"
     ) {
@@ -800,10 +823,12 @@ export const endChatByStudent = mutation({
     const appt = await ctx.db.get(args.appointmentId);
     if (!appt) throw new Error("Appointment not found");
 
-    if (!(user.role === "student" && String(appt.studentId) === String(user._id))) {
+    if (
+      !(user.role === "student" && String(appt.studentId) === String(user._id))
+    ) {
       throw new Error("Unauthorized");
     }
-    
+
     // Append a system message and set chat-ended flags so the counsellor sees it.
     const existingMessages = (appt as any).chatMessages ?? [];
     const now = Date.now();

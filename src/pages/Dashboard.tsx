@@ -60,7 +60,9 @@ export default function Dashboard() {
   // Add: local flag to suppress queries while signing out
   const [signingOut, setSigningOut] = React.useState(false);
   const [showAiChat, setShowAiChat] = React.useState(false);
-  const [chatAppointmentId, setChatAppointmentId] = React.useState<string | null>(null);
+  const [chatAppointmentId, setChatAppointmentId] = React.useState<
+    string | null
+  >(null);
 
   // Auto-open booking drawer when ?book=1 is in the URL
   React.useEffect(() => {
@@ -95,7 +97,7 @@ export default function Dashboard() {
         // Stop other listeners from running. Do not set returnValue.
         e.stopImmediatePropagation?.();
       } catch (err) {
-        console.log(err)
+        console.log(err);
       }
     }
 
@@ -581,27 +583,61 @@ export default function Dashboard() {
                             ) : null}
                             {(appointment as any).proposedFollowUp && (
                               <div className="mt-2 p-2 rounded bg-yellow-50 border">
-                                <div className="text-sm font-medium">Follow-up proposed</div>
+                                <div className="text-sm font-medium">
+                                  Follow-up proposed
+                                </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {((appointment as any).proposedFollowUp.date ? new Date((appointment as any).proposedFollowUp.date).toLocaleDateString() : "")} at {(appointment as any).proposedFollowUp.timeSlot ?? ""}
+                                  {(appointment as any).proposedFollowUp.date
+                                    ? new Date(
+                                        (
+                                          appointment as any
+                                        ).proposedFollowUp.date,
+                                      ).toLocaleDateString()
+                                    : ""}{" "}
+                                  at{" "}
+                                  {(appointment as any).proposedFollowUp
+                                    .timeSlot ?? ""}
                                 </div>
                                 <div className="mt-2 flex gap-2">
-                                  <Button size="sm" onClick={async () => {
-                                    try {
-                                      await acceptFollowUp({ appointmentId: appointment._id as any });
-                                      toast("Follow-up accepted. The session will be scheduled.");
-                                    } catch (e: any) {
-                                      toast(e?.message ?? "Failed to accept follow-up");
-                                    }
-                                  }}>Accept</Button>
-                                  <Button size="sm" variant="outline" onClick={async () => {
-                                    try {
-                                      await rejectFollowUp({ appointmentId: appointment._id as any });
-                                      toast("Follow-up rejected.");
-                                    } catch (e: any) {
-                                      toast(e?.message ?? "Failed to reject follow-up");
-                                    }
-                                  }}>Reject</Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        await acceptFollowUp({
+                                          appointmentId: appointment._id as any,
+                                        });
+                                        toast(
+                                          "Follow-up accepted. The session will be scheduled.",
+                                        );
+                                      } catch (e: any) {
+                                        toast(
+                                          e?.message ??
+                                            "Failed to accept follow-up",
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    Accept
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={async () => {
+                                      try {
+                                        await rejectFollowUp({
+                                          appointmentId: appointment._id as any,
+                                        });
+                                        toast("Follow-up rejected.");
+                                      } catch (e: any) {
+                                        toast(
+                                          e?.message ??
+                                            "Failed to reject follow-up",
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    Reject
+                                  </Button>
                                 </div>
                               </div>
                             )}
@@ -1802,10 +1838,11 @@ function AppointmentChatDialog({
   appointmentId: string | null;
 }) {
   // Query messages for the appointment when appointmentId is present
-  const messages = useQuery(
-    api.appointments.listChatMessages,
-    appointmentId ? { appointmentId: appointmentId as any } : "skip",
-  ) ?? [];
+  const messages =
+    useQuery(
+      api.appointments.listChatMessages,
+      appointmentId ? { appointmentId: appointmentId as any } : "skip",
+    ) ?? [];
 
   const sendMessage = useMutation(api.appointments.sendChatMessage);
   const endChatByStudent = useMutation(api.appointments.endChatByStudent);
@@ -1839,7 +1876,9 @@ function AppointmentChatDialog({
     setPending(true);
     try {
       await endChatByStudent({ appointmentId: appointmentId as any });
-      toast("You ended the chat. The counsellor will be notified to submit the post-chat form.");
+      toast(
+        "You ended the chat. The counsellor will be notified to submit the post-chat form.",
+      );
       onOpenChange(false);
     } catch (e: any) {
       toast(e?.message ?? "Failed to end chat.");
@@ -1858,22 +1897,39 @@ function AppointmentChatDialog({
         <div className="flex flex-col gap-3">
           <div className="h-64 overflow-y-auto rounded border p-3 bg-muted/30 space-y-3">
             {messages.length === 0 && (
-              <div className="text-center text-muted-foreground">No messages yet.</div>
+              <div className="text-center text-muted-foreground">
+                No messages yet.
+              </div>
             )}
             {messages.map((m: any, i: number) => (
-              <div key={i} className={m.fromUserId === (typeof window !== "undefined" ? (window as any).__convex_user_id : undefined) ? "text-right" : "text-left"}>
+              <div
+                key={i}
+                className={
+                  m.fromUserId ===
+                  (typeof window !== "undefined"
+                    ? (window as any).__convex_user_id
+                    : undefined)
+                    ? "text-right"
+                    : "text-left"
+                }
+              >
                 <div
                   className={
                     "inline-block px-3 py-2 rounded-lg max-w-[85%] whitespace-pre-wrap " +
-                    (m.role === "student" ? "bg-primary text-primary-foreground" : "bg-background border")
+                    (m.role === "student"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background border")
                   }
                 >
                   <div className="text-xs text-muted-foreground mb-1">
-                    {m.fromName ?? (m.role === "counsellor" ? "Counsellor" : "Student")}
+                    {m.fromName ??
+                      (m.role === "counsellor" ? "Counsellor" : "Student")}
                   </div>
                   {m.content}
                   <div className="text-[10px] text-muted-foreground mt-1">
-                    {m.createdAt ? new Date(m.createdAt).toLocaleTimeString() : ""}
+                    {m.createdAt
+                      ? new Date(m.createdAt).toLocaleTimeString()
+                      : ""}
                   </div>
                 </div>
               </div>
@@ -1900,10 +1956,17 @@ function AppointmentChatDialog({
               }}
               disabled={pending}
             />
-            <Button onClick={doSend} disabled={pending || input.trim().length === 0}>
+            <Button
+              onClick={doSend}
+              disabled={pending || input.trim().length === 0}
+            >
               Send
             </Button>
-            <Button variant="destructive" onClick={doEndChat} disabled={pending}>
+            <Button
+              variant="destructive"
+              onClick={doEndChat}
+              disabled={pending}
+            >
               End Chat
             </Button>
           </div>

@@ -103,7 +103,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   }
   return <>{children}</>;
 }
-  
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <InstrumentationProvider>
@@ -118,7 +118,14 @@ createRoot(document.getElementById("root")!).render(
               element={<AuthPage redirectAfterAuth="/dashboard" />}
             />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <AdminPage />
+                </AdminRoute>
+              }
+            />
             <Route path="/counsellor" element={<CounsellorPage />} />
             <Route path="/student" element={<StudentPage />} />
             <Route path="/forum" element={<ForumPage />} />

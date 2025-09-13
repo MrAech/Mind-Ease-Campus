@@ -184,7 +184,10 @@ export const moderatePost = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
-    if (!user || (user.role !== ROLES.ADMIN && user.role !== ROLES.PEER_VOLUNTEER)) {
+    if (
+      !user ||
+      (user.role !== ROLES.ADMIN && user.role !== ROLES.PEER_VOLUNTEER)
+    ) {
       throw new Error("Unauthorized");
     }
 

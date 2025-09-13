@@ -206,13 +206,20 @@ export const exportScreeningsCsv = query({
     // Fetch screenings for institution (and optional tool filter)
     const q = ctx.db
       .query("screeningResults")
-      .withIndex("by_institution", (qq) => qq.eq("institutionId", args.institutionId));
+      .withIndex("by_institution", (qq) =>
+        qq.eq("institutionId", args.institutionId),
+      );
 
     const all = await q.collect();
-    const filtered = args.toolType ? all.filter((s) => s.toolType === args.toolType) : all;
+    const filtered = args.toolType
+      ? all.filter((s) => s.toolType === args.toolType)
+      : all;
 
     // Determine max response length to build headers
-    const maxResponses = filtered.reduce((m, s) => Math.max(m, (s.responses || []).length), 0);
+    const maxResponses = filtered.reduce(
+      (m, s) => Math.max(m, (s.responses || []).length),
+      0,
+    );
 
     // CSV header
     const headers = [
@@ -220,7 +227,9 @@ export const exportScreeningsCsv = query({
       "score",
       "riskLevel",
       "isAnonymous",
-      ...Array.from({ length: maxResponses }).map((_, i) => `response_${i + 1}`),
+      ...Array.from({ length: maxResponses }).map(
+        (_, i) => `response_${i + 1}`,
+      ),
       "createdAt",
     ];
 
@@ -241,7 +250,9 @@ export const exportScreeningsCsv = query({
         row.push(responses[i] ?? "");
       }
       // Use Convex document creation time if available
-      const createdAt = (s as any)._creationTime ? new Date((s as any)._creationTime).toISOString() : "";
+      const createdAt = (s as any)._creationTime
+        ? new Date((s as any)._creationTime).toISOString()
+        : "";
       row.push(createdAt);
       return row.map(escape).join(",");
     });

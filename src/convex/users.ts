@@ -263,7 +263,9 @@ export const removeUser = mutation({
         // delete counsellor appointments (best-effort)
         const appts = await ctx.db
           .query("appointments")
-          .withIndex("by_counsellor", (q) => q.eq("counsellorId", counsellor._id))
+          .withIndex("by_counsellor", (q) =>
+            q.eq("counsellorId", counsellor._id),
+          )
           .collect();
         for (const a of appts) {
           try {

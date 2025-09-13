@@ -47,8 +47,12 @@ export default function AdminPage() {
 
   // Export screenings CSV on demand: trigger useQuery via state
   const [exportArgs, setExportArgs] = useState<any>("skip");
-  const [pendingRemoveUser, setPendingRemoveUser] = useState<string | null>(null);
-  const [pendingRemovePost, setPendingRemovePost] = useState<string | null>(null);
+  const [pendingRemoveUser, setPendingRemoveUser] = useState<string | null>(
+    null,
+  );
+  const [pendingRemovePost, setPendingRemovePost] = useState<string | null>(
+    null,
+  );
   const exportCsv = useQuery(
     api.screening.exportScreeningsCsv,
     exportArgs === "skip" ? "skip" : exportArgs,
@@ -84,7 +88,9 @@ export default function AdminPage() {
     <div className="w-full px-6 py-8 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
-        <div className="text-sm text-muted-foreground">Signed in as {user?.email}</div>
+        <div className="text-sm text-muted-foreground">
+          Signed in as {user?.email}
+        </div>
       </div>
 
       {/* Role management */}
@@ -113,11 +119,17 @@ export default function AdminPage() {
                       <select
                         defaultValue={u.role ?? "student"}
                         onChange={(e) => {
-                          const newRole = e.target.value as "admin" | "student" | "counsellor" | "peer_volunteer";
+                          const newRole = e.target.value as
+                            | "admin"
+                            | "student"
+                            | "counsellor"
+                            | "peer_volunteer";
                           setRole({ userId: u._id, role: newRole })
                             .then(() => toast.success("Role updated"))
                             .catch((err: Error) =>
-                              toast.error(err?.message || "Failed to update role"),
+                              toast.error(
+                                err?.message || "Failed to update role",
+                              ),
                             );
                         }}
                       >
@@ -154,7 +166,9 @@ export default function AdminPage() {
                                   setPendingRemoveUser(null);
                                 })
                                 .catch((err: Error) => {
-                                  toast.error(err?.message || "Failed to remove user");
+                                  toast.error(
+                                    err?.message || "Failed to remove user",
+                                  );
                                   setPendingRemoveUser(null);
                                 })
                             }
@@ -228,7 +242,10 @@ export default function AdminPage() {
                   toast.error("No institution associated with your account");
                   return;
                 }
-                setExportArgs({ institutionId: user.institutionId, toolType: "phq9" });
+                setExportArgs({
+                  institutionId: user.institutionId,
+                  toolType: "phq9",
+                });
               }}
             >
               Export PHQ-9 only
@@ -244,7 +261,9 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent>
           {(posts ?? []).length === 0 ? (
-            <div className="text-sm text-muted-foreground">No posts to moderate.</div>
+            <div className="text-sm text-muted-foreground">
+              No posts to moderate.
+            </div>
           ) : (
             <div className="space-y-3">
               {(posts ?? []).map((p: any) => (
@@ -252,7 +271,9 @@ export default function AdminPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="font-semibold">{p.title}</div>
-                      <div className="text-xs text-muted-foreground">{p.user?.name ?? (p.isAnonymous ? "Anonymous" : "User")}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {p.user?.name ?? (p.isAnonymous ? "Anonymous" : "User")}
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       {!p.isHidden ? (
@@ -260,9 +281,15 @@ export default function AdminPage() {
                           variant="destructive"
                           size="sm"
                           onClick={() =>
-                            moderatePost({ postId: p._id, isModerated: true, isHidden: true })
+                            moderatePost({
+                              postId: p._id,
+                              isModerated: true,
+                              isHidden: true,
+                            })
                               .then(() => toast.success("Post hidden"))
-                              .catch((e: Error) => toast.error(e?.message || "Failed"))
+                              .catch((e: Error) =>
+                                toast.error(e?.message || "Failed"),
+                              )
                           }
                         >
                           Hide
@@ -273,7 +300,9 @@ export default function AdminPage() {
                           onClick={() =>
                             restorePost({ postId: p._id })
                               .then(() => toast.success("Post restored"))
-                              .catch((e: Error) => toast.error(e?.message || "Failed"))
+                              .catch((e: Error) =>
+                                toast.error(e?.message || "Failed"),
+                              )
                           }
                         >
                           Restore
@@ -283,8 +312,12 @@ export default function AdminPage() {
                         size="sm"
                         onClick={() =>
                           flagPost({ postId: p._id })
-                            .then(() => toast.success("Post flagged for review"))
-                            .catch((e: Error) => toast.error(e?.message || "Failed"))
+                            .then(() =>
+                              toast.success("Post flagged for review"),
+                            )
+                            .catch((e: Error) =>
+                              toast.error(e?.message || "Failed"),
+                            )
                         }
                       >
                         Flag
@@ -326,7 +359,10 @@ export default function AdminPage() {
                       )}
                     </div>
                   </div>
-                  <div className="mt-2 text-sm" dangerouslySetInnerHTML={{ __html: p.content }} />
+                  <div
+                    className="mt-2 text-sm"
+                    dangerouslySetInnerHTML={{ __html: p.content }}
+                  />
                 </div>
               ))}
             </div>
