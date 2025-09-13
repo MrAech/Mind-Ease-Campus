@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getCurrentUser } from "./users";
+import { ROLES } from "./schema";
 
 export const createPost = mutation({
   args: {
@@ -182,7 +184,7 @@ export const moderatePost = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
-    if (!user || (user.role !== "admin" && user.role !== "peer_volunteer")) {
+    if (!user || (user.role !== ROLES.ADMIN && user.role !== ROLES.PEER_VOLUNTEER)) {
       throw new Error("Unauthorized");
     }
 
@@ -190,5 +192,71 @@ export const moderatePost = mutation({
       isModerated: args.isModerated,
       isHidden: args.isHidden ?? false,
     });
+  },
+});
+
+export const flagPost = mutation({
+  args: { postId: v.id("forumPosts") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+
+    const post = await ctx.db.get(args.postId);
+    if (!post) throw new Error("Post not found");
+
+    // Only users within the same institution can flag posts
+    if (post.institutionId !== user.institutionId) {
+      throw new Error("Unauthorized");
+    }
+
+    // Mark post as moderated for admin review
+    await ctx.db.patch(args.postId, { isModerated: true });
+  },
+});
+
+export const restorePost = mutation({
+  args: { postId: v.id("forumPosts") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user || user.role !== ROLES.ADMIN) throw new Error("Unauthorized");
+
+    await ctx.db.patch(args.postId, { isHidden: false, isModerated: false });
+  },
+});
+
+export const removePost = mutation({
+  args: { postId: v.id("forumPosts") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user || user.role !== ROLES.ADMIN) throw new Error("Unauthorized");
+
+    const post = await ctx.db.get(args.postId);
+    if (!post) throw new Error("Post not found");
+
+    // Delete likes associated with this post (best-effort cleanup)
+    const likes = await ctx.db
+      .query("forumLikes")
+      .filter((q) => q.eq(q.field("postId"), args.postId))
+      .collect();
+    for (const l of likes) {
+      try {
+        await ctx.db.delete(l._id);
+      } catch {
+        // ignore individual delete failures
+      }
+    }
+
+    // Delete the post record
+    await ctx.db.delete(args.postId);
+
+    // If this was a reply, decrement parent replyCount (best-effort)
+    if (post.parentId) {
+      const parent = await ctx.db.get(post.parentId);
+      if (parent) {
+        await ctx.db.patch(post.parentId, {
+          replyCount: Math.max(0, parent.replyCount - 1),
+        });
+      }
+    }
   },
 });

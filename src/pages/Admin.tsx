@@ -1,348 +1,338 @@
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
-
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useEffect, useState } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight, Loader2, Mail, UserX } from "lucide-react";
-import { Suspense, useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
-interface AuthProps {
-  redirectAfterAuth?: string;
-}
+/**
+ * Admin dashboard
+ * - role management
+ * - anonymized screening export (CSV)
+ * - basic forum moderation (hide/restore/mark moderated)
+ */
 
-function Auth({ redirectAfterAuth }: AuthProps = {}) {
-  const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
-  const navigate = useNavigate();
-  const [step, setStep] = useState<"signIn" | { email: string }>("signIn");
-  const [otp, setOtp] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [emailError, setEmailError] = useState<string | null>(null);
+export default function AdminPage() {
+  const { user, isLoading } = useAuth();
+  const [unauthorizedRedirected, setUnauthorizedRedirected] = useState(false);
 
+  // Redirect non-admins to dashboard
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      const redirect = redirectAfterAuth || "/";
-      navigate(redirect);
+    if (!isLoading) {
+      if (!user || user.role !== "admin") {
+        // simple client-side redirect for unauthorized users
+        window.location.href = "/dashboard";
+        setUnauthorizedRedirected(true);
+      }
     }
-  }, [authLoading, isAuthenticated, navigate, redirectAfterAuth]);
+  }, [isLoading, user]);
 
-  const isValidEmail = (val: string) => {
-    const e = val.trim();
-    const re = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-    return re.test(e);
-  };
+  // Users & role management
+  const users = useQuery(api.users.listAll);
+  const setRole = useMutation(api.users.setRole);
+  const removeUser = useMutation(api.users.removeUser);
 
-  const handleEmailSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsLoading(true);
-    setError(null);
+  // Forum posts for moderation (admin's institution)
+  const posts = useQuery(
+    api.forum.listPosts,
+    user?.institutionId ? { institutionId: user.institutionId } : "skip",
+  );
+  const moderatePost = useMutation(api.forum.moderatePost);
+  const restorePost = useMutation(api.forum.restorePost);
+  const flagPost = useMutation(api.forum.flagPost);
+  const removePost = useMutation(api.forum.removePost);
 
-    const formData = new FormData(event.currentTarget);
-    const emailVal = (formData.get("email") as string)?.trim() || "";
+  // Export screenings CSV on demand: trigger useQuery via state
+  const [exportArgs, setExportArgs] = useState<any>("skip");
+  const [pendingRemoveUser, setPendingRemoveUser] = useState<string | null>(null);
+  const [pendingRemovePost, setPendingRemovePost] = useState<string | null>(null);
+  const exportCsv = useQuery(
+    api.screening.exportScreeningsCsv,
+    exportArgs === "skip" ? "skip" : exportArgs,
+  );
 
-    if (!isValidEmail(emailVal)) {
-      setEmailError("Please enter a valid email address.");
-      setIsLoading(false);
-      return;
+  // When CSV becomes available, trigger download
+  useEffect(() => {
+    if (typeof exportCsv === "string" && exportCsv.length > 0) {
+      const blob = new Blob([exportCsv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `screenings_${user?.institutionId ?? "all"}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Screenings CSV downloaded.");
+      // reset export args to avoid repeated downloads
+      setExportArgs("skip");
     }
-    setEmailError(null);
+  }, [exportCsv, user]);
 
-    try {
-      await signIn("email-otp", formData);
-      setStep({ email: emailVal });
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Email sign-in error:", error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to send verification code. Please try again.",
-      );
-      setIsLoading(false);
-    }
-  };
-
-  const handleOtpSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
-    const numericOtp = otp.replace(/\D/g, "");
-    if (!/^\d{6}$/.test(numericOtp)) {
-      setError("Please enter a valid 6-digit verification code.");
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const formData = new FormData(event.currentTarget);
-      await signIn("email-otp", formData);
-
-      const redirect = redirectAfterAuth || "/";
-      navigate(redirect);
-    } catch (error) {
-      console.error("OTP verification error:", error);
-
-      setError("The verification code you entered is incorrect.");
-      setIsLoading(false);
-
-      setOtp("");
-    }
-  };
-
-  const handleGuestLogin = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      await signIn("anonymous");
-      const redirect = redirectAfterAuth || "/";
-      navigate(redirect);
-    } catch (error) {
-      console.error("Guest login error:", error);
-      setError(
-        `Failed to sign in as guest: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
-      );
-      setIsLoading(false);
-    }
-  };
+  if (isLoading || unauthorizedRedirected) {
+    return (
+      <div className="w-full flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full flex flex-col">
-      {/* Auth Content */}
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex items-center justify-center h-full flex-col">
-          <Card className="min-w-[350px] pb-0 border shadow-md">
-            {step === "signIn" ? (
-              <>
-                <CardHeader className="text-center">
-                  <div className="flex justify-center">
-                    <img
-                      src="/logo.svg"
-                      alt="Lock Icon"
-                      width={64}
-                      height={64}
-                      className="rounded-lg mb-4 mt-4 cursor-pointer"
-                      onClick={() => navigate("/")}
-                    />
-                  </div>
-                  <CardTitle className="text-xl">Get Started</CardTitle>
-                  <CardDescription>
-                    Enter your email to log in or sign up
-                  </CardDescription>
-                </CardHeader>
-                <form onSubmit={handleEmailSubmit}>
-                  <CardContent>
-                    <div className="relative flex items-center gap-2">
-                      <div className="relative flex-1">
-                        <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          name="email"
-                          placeholder="name@example.com"
-                          type="email"
-                          className="pl-9"
-                          disabled={isLoading}
-                          required
-                          value={email}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEmail(val);
-                            if (val.length === 0) {
-                              setEmailError("Email is required.");
-                            } else if (!isValidEmail(val)) {
-                              setEmailError(
-                                "Please enter a valid email address.",
-                              );
-                            } else {
-                              setEmailError(null);
-                            }
-                            if (error) setError(null);
-                          }}
-                          inputMode="email"
-                          autoComplete="email"
-                          pattern="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
-                          aria-invalid={!!emailError}
-                          aria-describedby={
-                            emailError ? "email-error" : undefined
-                          }
-                        />
-                      </div>
-                      <Button
-                        type="submit"
-                        variant="outline"
-                        size="icon"
-                        disabled={
-                          isLoading || !!emailError || email.trim().length === 0
-                        }
-                        title={emailError ?? undefined}
-                      >
-                        {isLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <ArrowRight className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                    {emailError && (
-                      <p id="email-error" className="mt-2 text-sm text-red-500">
-                        {emailError}
-                      </p>
-                    )}
-                    {error && !emailError && (
-                      <p className="mt-2 text-sm text-red-500">{error}</p>
-                    )}
-                    <div className="mt-4">
-                      <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                          <span className="w-full border-t" />
-                        </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                          <span className="bg-background px-2 text-muted-foreground">
-                            Or
-                          </span>
-                        </div>
-                      </div>
+    <div className="w-full px-6 py-8 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
+        <div className="text-sm text-muted-foreground">Signed in as {user?.email}</div>
+      </div>
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full mt-4"
-                        onClick={handleGuestLogin}
-                        disabled={isLoading}
-                      >
-                        <UserX className="mr-2 h-4 w-4" />
-                        Continue as Guest
-                      </Button>
-                    </div>
-                  </CardContent>
-                </form>
-              </>
-            ) : (
-              <>
-                <CardHeader className="text-center mt-4">
-                  <CardTitle>Check your email</CardTitle>
-                  <CardDescription>
-                    We've sent a code to {step.email}
-                  </CardDescription>
-                </CardHeader>
-                <form onSubmit={handleOtpSubmit}>
-                  <CardContent className="pb-4">
-                    <input type="hidden" name="email" value={step.email} />
-                    <input type="hidden" name="code" value={otp} />
-
-                    <div className="flex justify-center">
-                      <InputOTP
-                        value={otp}
-                        onChange={(val) => {
-                          const next = val.replace(/\D/g, "").slice(0, 6);
-                          setOtp(next);
-                          if (error) setError(null);
-                        }}
-                        maxLength={6}
-                        disabled={isLoading}
-                        onKeyDown={(e) => {
-                          if (
-                            e.key === "Enter" &&
-                            otp.length === 6 &&
-                            !isLoading
-                          ) {
-                            const form = (e.target as HTMLElement).closest(
-                              "form",
+      {/* Role management */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle>Role management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-sm text-muted-foreground">
+                  <th className="pb-2">Name</th>
+                  <th className="pb-2">Email</th>
+                  <th className="pb-2">Role</th>
+                  <th className="pb-2">Institution</th>
+                  <th className="pb-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(users ?? []).map((u: any) => (
+                  <tr key={u._id} className="border-t">
+                    <td className="py-2">{u.name || "—"}</td>
+                    <td className="py-2 text-sm">{u.email || "—"}</td>
+                    <td className="py-2">
+                      <select
+                        defaultValue={u.role ?? "student"}
+                        onChange={(e) => {
+                          const newRole = e.target.value as "admin" | "student" | "counsellor" | "peer_volunteer";
+                          setRole({ userId: u._id, role: newRole })
+                            .then(() => toast.success("Role updated"))
+                            .catch((err: Error) =>
+                              toast.error(err?.message || "Failed to update role"),
                             );
-                            if (form) {
-                              form.requestSubmit();
-                            }
-                          }
                         }}
                       >
-                        <InputOTPGroup>
-                          {Array.from({ length: 6 }).map((_, index) => (
-                            <InputOTPSlot key={index} index={index} />
-                          ))}
-                        </InputOTPGroup>
-                      </InputOTP>
-                    </div>
-                    {error && (
-                      <p className="mt-2 text-sm text-red-500 text-center">
-                        {error}
-                      </p>
-                    )}
-                    <p className="text-sm text-muted-foreground text-center mt-4">
-                      Didn't receive a code?{" "}
+                        <option value="admin">admin</option>
+                        <option value="counsellor">counsellor</option>
+                        <option value="peer_volunteer">peer_volunteer</option>
+                        <option value="student">student</option>
+                      </select>
+                    </td>
+                    <td className="py-2">{u.institutionId ?? "—"}</td>
+                    <td className="py-2">
                       <Button
-                        variant="link"
-                        className="p-0 h-auto"
-                        onClick={() => setStep("signIn")}
+                        onClick={() => {
+                          setRole({ userId: u._id, role: "student" })
+                            .then(() => toast.success("Demoted to student"))
+                            .catch((err: Error) =>
+                              toast.error(err?.message || "Failed"),
+                            );
+                        }}
+                        variant="ghost"
+                        size="sm"
                       >
-                        Try again
+                        Quick demote
                       </Button>
-                    </p>
-                  </CardContent>
-                  <CardFooter className="flex-col gap-2">
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={isLoading || otp.length !== 6}
-                    >
-                      {isLoading ? (
+                      {u._id === pendingRemoveUser ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Verifying...
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() =>
+                              removeUser({ userId: u._id })
+                                .then(() => {
+                                  toast.success("User removed");
+                                  setPendingRemoveUser(null);
+                                })
+                                .catch((err: Error) => {
+                                  toast.error(err?.message || "Failed to remove user");
+                                  setPendingRemoveUser(null);
+                                })
+                            }
+                            className="ml-2"
+                          >
+                            Confirm Remove
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => setPendingRemoveUser(null)}
+                            className="ml-2"
+                          >
+                            Cancel
+                          </Button>
                         </>
                       ) : (
-                        <>
-                          Verify code
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            if (u._id === user?._id) {
+                              toast.error("Cannot remove yourself");
+                              return;
+                            }
+                            setPendingRemoveUser(u._id);
+                          }}
+                          className="ml-2"
+                        >
+                          Remove
+                        </Button>
                       )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => {
-                        setStep("signIn");
-                        setOtp("");
-                        setError(null);
-                      }}
-                      disabled={isLoading}
-                      className="w-full"
-                    >
-                      Use different email
-                    </Button>
-                  </CardFooter>
-                </form>
-              </>
-            )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
-            <div className="py-4 px-6 text-xs text-center text-muted-foreground bg-muted border-t rounded-b-lg">
-              Secured by Wellbeing Hub
+      {/* Screening exports */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle>Screenings / Trends</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-sm text-muted-foreground">
+            Export anonymized screening results for your institution as CSV.
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={user?.institutionId ?? ""}
+              readOnly
+              aria-label="Institution ID"
+            />
+            <Button
+              onClick={() => {
+                if (!user?.institutionId) {
+                  toast.error("No institution associated with your account");
+                  return;
+                }
+                setExportArgs({ institutionId: user.institutionId });
+              }}
+            >
+              Export CSV
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!user?.institutionId) {
+                  toast.error("No institution associated with your account");
+                  return;
+                }
+                setExportArgs({ institutionId: user.institutionId, toolType: "phq9" });
+              }}
+            >
+              Export PHQ-9 only
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Forum moderation */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle>Forum moderation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {(posts ?? []).length === 0 ? (
+            <div className="text-sm text-muted-foreground">No posts to moderate.</div>
+          ) : (
+            <div className="space-y-3">
+              {(posts ?? []).map((p: any) => (
+                <div key={p._id} className="p-3 border rounded-md">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="font-semibold">{p.title}</div>
+                      <div className="text-xs text-muted-foreground">{p.user?.name ?? (p.isAnonymous ? "Anonymous" : "User")}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      {!p.isHidden ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() =>
+                            moderatePost({ postId: p._id, isModerated: true, isHidden: true })
+                              .then(() => toast.success("Post hidden"))
+                              .catch((e: Error) => toast.error(e?.message || "Failed"))
+                          }
+                        >
+                          Hide
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            restorePost({ postId: p._id })
+                              .then(() => toast.success("Post restored"))
+                              .catch((e: Error) => toast.error(e?.message || "Failed"))
+                          }
+                        >
+                          Restore
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          flagPost({ postId: p._id })
+                            .then(() => toast.success("Post flagged for review"))
+                            .catch((e: Error) => toast.error(e?.message || "Failed"))
+                        }
+                      >
+                        Flag
+                      </Button>
+                      {p._id === pendingRemovePost ? (
+                        <>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              removePost({ postId: p._id })
+                                .then(() => {
+                                  toast.success("Post removed");
+                                  setPendingRemovePost(null);
+                                })
+                                .catch((e: Error) => {
+                                  toast.error(e?.message || "Failed to remove");
+                                  setPendingRemovePost(null);
+                                });
+                            }}
+                          >
+                            Confirm Remove
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => setPendingRemovePost(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setPendingRemovePost(p._id)}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-sm" dangerouslySetInnerHTML={{ __html: p.content }} />
+                </div>
+              ))}
             </div>
-          </Card>
-        </div>
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
-  );
-}
-
-export default function AuthPage(props: AuthProps) {
-  return (
-    <Suspense>
-      <Auth {...props} />
-    </Suspense>
   );
 }

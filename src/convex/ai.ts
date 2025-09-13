@@ -1,5 +1,5 @@
 "use node";
-
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import OpenAI from "openai";

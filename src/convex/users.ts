@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
@@ -236,5 +237,129 @@ export const ensureInitialRoles = mutation({
             : ROLES.STUDENT
         : (me.role ?? null),
     };
+  },
+});
+
+export const removeUser = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const me = await getCurrentUser(ctx);
+    if (!me || me.role !== ROLES.ADMIN) throw new Error("Unauthorized");
+
+    if (me._id === args.userId) {
+      throw new Error("Cannot remove yourself");
+    }
+
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("User not found");
+
+    // Remove counsellor profile and its appointments if present
+    const counsellor = await ctx.db
+      .query("counsellors")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+    if (counsellor) {
+      try {
+        // delete counsellor appointments (best-effort)
+        const appts = await ctx.db
+          .query("appointments")
+          .withIndex("by_counsellor", (q) => q.eq("counsellorId", counsellor._id))
+          .collect();
+        for (const a of appts) {
+          try {
+            await ctx.db.delete(a._id);
+          } catch {
+            // ignore
+          }
+        }
+        await ctx.db.delete(counsellor._id);
+      } catch {
+        // ignore failures
+      }
+    }
+
+    // Delete appointments created by the user (best-effort)
+    try {
+      const userAppts = await ctx.db
+        .query("appointments")
+        .withIndex("by_student", (q) => q.eq("studentId", args.userId))
+        .collect();
+      for (const a of userAppts) {
+        try {
+          await ctx.db.delete(a._id);
+        } catch {
+          // ignore
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // Delete forum likes made by the user
+    try {
+      const likes = await ctx.db
+        .query("forumLikes")
+        .filter((q) => q.eq(q.field("userId"), args.userId))
+        .collect();
+      for (const l of likes) {
+        try {
+          await ctx.db.delete(l._id);
+        } catch {
+          // ignore
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // Delete forum posts authored by the user (cleanup replies and likes)
+    try {
+      const posts = await ctx.db
+        .query("forumPosts")
+        .filter((q) => q.eq(q.field("userId"), args.userId))
+        .collect();
+      for (const p of posts) {
+        try {
+          // delete likes for the post
+          const postLikes = await ctx.db
+            .query("forumLikes")
+            .filter((q) => q.eq(q.field("postId"), p._id))
+            .collect();
+          for (const pl of postLikes) {
+            try {
+              await ctx.db.delete(pl._id);
+            } catch {
+              // ignore
+            }
+          }
+
+          // delete the post
+          await ctx.db.delete(p._id);
+
+          // decrement parent replyCount if it was a reply
+          if (p.parentId) {
+            try {
+              const parent = await ctx.db.get(p.parentId);
+              if (parent) {
+                await ctx.db.patch(p.parentId, {
+                  replyCount: Math.max(0, parent.replyCount - 1),
+                });
+              }
+            } catch {
+              // ignore
+            }
+          }
+        } catch {
+          // ignore per-post failures
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // Finally delete the user record
+    await ctx.db.delete(args.userId);
+
+    return { success: true };
   },
 });

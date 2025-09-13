@@ -170,6 +170,13 @@ export default function Dashboard() {
     );
   }, [counsellors, newAptCounsellor]);
 
+  const bookedAppointmentsForDate = useQuery(
+    api.appointments.listAppointmentsForCounsellorDate,
+    !newAptCounsellor || !newAptDate
+      ? "skip"
+      : { counsellorId: newAptCounsellor as any, scheduledDate: newAptDate },
+  );
+
   const derivedTimeSlots = React.useMemo(() => {
     if (!selectedCounsellor || !newAptDate) return [] as Array<string>;
     try {
@@ -250,6 +257,12 @@ export default function Dashboard() {
         }
       }
 
+      // Filter out already-booked slots for the selected counsellor/date
+      const bookedSlots = (bookedAppointmentsForDate ?? []).map(
+        (b: any) => b.timeSlot,
+      );
+      const available = slots.filter((s) => !bookedSlots.includes(s));
+
       if (import.meta.env?.DEV) {
         console.log("[derivedTimeSlots]", {
           newAptDate,
@@ -257,15 +270,17 @@ export default function Dashboard() {
           matchedKey: matchKey,
           availability,
           slots,
+          bookedSlots,
+          available,
         });
       }
 
-      return slots;
+      return available;
     } catch (err) {
       console.log(err);
       return [] as Array<string>;
     }
-  }, [selectedCounsellor, newAptDate]);
+  }, [selectedCounsellor, newAptDate, bookedAppointmentsForDate]);
 
   // Auto-select the first available time if none selected yet
   React.useEffect(() => {

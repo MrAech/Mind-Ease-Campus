@@ -10,6 +10,7 @@ import ForumPage from "@/pages/Forum.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import { StrictMode, useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import "./index.css";
@@ -86,6 +87,23 @@ function RouteSyncer() {
   return null;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isLoading, isAdmin } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="w-full flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  if (!isAdmin) {
+    // enforce client-side redirect for non-admins
+    window.location.href = "/dashboard";
+    return null;
+  }
+  return <>{children}</>;
+}
+  
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <InstrumentationProvider>
@@ -100,7 +118,7 @@ createRoot(document.getElementById("root")!).render(
               element={<AuthPage redirectAfterAuth="/dashboard" />}
             />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
             <Route path="/counsellor" element={<CounsellorPage />} />
             <Route path="/student" element={<StudentPage />} />
             <Route path="/forum" element={<ForumPage />} />

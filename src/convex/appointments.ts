@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getCurrentUser } from "./users";
@@ -27,6 +28,7 @@ function getAppointmentDate(appointment: any) {
       return new Date(y, m - 1, d, hour, minute);
     }
   } catch (e) {
+    console.log(e);
     // fallthrough
   }
   return new Date(appointment.scheduledDate);
@@ -412,6 +414,7 @@ export const addSessionResult = mutation({
         };
       }
     } catch (e) {
+      console.log(e);
       // ignore
     }
 
@@ -434,7 +437,7 @@ export const addSessionResult = mutation({
 
     // If counsellor submitted a structured follow-up proposal (serialized JSON),
     // store it under `proposedFollowUp` to allow the student to accept/reject.
-    let patch: any = {
+    const patch: any = {
       sessionNotes: args.sessionNotes,
       diagnosis: args.diagnosis,
       status: "completed",
@@ -461,10 +464,12 @@ export const addSessionResult = mutation({
             patch.followUp = args.followUp;
           }
         } catch (e) {
+          console.log(e);
           patch.followUp = args.followUp;
         }
       }
     } catch (e) {
+      console.log(e);
       // ignore
     }
 
@@ -652,5 +657,38 @@ export const aiChat = action({
       model: data?.model || (args.model ?? "anthropic/claude-3-haiku"),
       usage: data?.usage || null,
     };
+  },
+});
+
+// Admin/student helper: list appointments for a counsellor on a specific date (non-cancelled)
+export const listAppointmentsForCounsellorDate = query({
+  args: {
+    counsellorId: v.id("counsellors"),
+    scheduledDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+
+    const counsellor = await ctx.db.get(args.counsellorId);
+    if (!counsellor) throw new Error("Counsellor not found");
+
+    // Allow admins or users from the same institution to view booked slots
+    if (user.role !== "admin" && counsellor.institutionId !== user.institutionId) {
+      throw new Error("Unauthorized");
+    }
+
+    const appts = await ctx.db
+      .query("appointments")
+      .withIndex("by_counsellor", (q) => q.eq("counsellorId", args.counsellorId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("scheduledDate"), args.scheduledDate),
+          q.neq(q.field("status"), "cancelled"),
+        ),
+      )
+      .collect();
+
+    return appts;
   },
 });

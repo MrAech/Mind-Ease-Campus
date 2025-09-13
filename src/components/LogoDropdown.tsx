@@ -9,11 +9,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
-import { Home, LogOut } from "lucide-react";
+import { Home, LogOut, Shield } from "lucide-react";
 import { useNavigate } from "react-router";
 
 export function LogoDropdown() {
-  const { isAuthenticated, signOut } = useAuth();
+  const { isAuthenticated, signOut, user } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -27,6 +27,10 @@ export function LogoDropdown() {
 
   const handleGoHome = () => {
     navigate("/");
+  };
+
+  const handleGoAdmin = () => {
+    navigate("/admin");
   };
 
   return (
@@ -47,6 +51,12 @@ export function LogoDropdown() {
           <Home className="mr-2 h-4 w-4" />
           Landing Page
         </DropdownMenuItem>
+        {isAuthenticated && user?.role === "admin" && (
+          <DropdownMenuItem onClick={handleGoAdmin} className="cursor-pointer">
+            <Shield className="mr-2 h-4 w-4" />
+            Admin Dashboard
+          </DropdownMenuItem>
+        )}
         {isAuthenticated && (
           <>
             <DropdownMenuSeparator />

@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getCurrentUser } from "./users";
 import { screeningToolValidator } from "./schema";
+import { ROLES } from "./schema";
 
 export const submitScreening = mutation({
   args: {
@@ -187,5 +189,64 @@ export const getInstitutionAnalytics = query({
     };
 
     return analytics;
+  },
+});
+
+export const exportScreeningsCsv = query({
+  args: {
+    institutionId: v.id("institutions"),
+    toolType: v.optional(screeningToolValidator),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user || user.role !== ROLES.ADMIN) {
+      throw new Error("Unauthorized");
+    }
+
+    // Fetch screenings for institution (and optional tool filter)
+    const q = ctx.db
+      .query("screeningResults")
+      .withIndex("by_institution", (qq) => qq.eq("institutionId", args.institutionId));
+
+    const all = await q.collect();
+    const filtered = args.toolType ? all.filter((s) => s.toolType === args.toolType) : all;
+
+    // Determine max response length to build headers
+    const maxResponses = filtered.reduce((m, s) => Math.max(m, (s.responses || []).length), 0);
+
+    // CSV header
+    const headers = [
+      "toolType",
+      "score",
+      "riskLevel",
+      "isAnonymous",
+      ...Array.from({ length: maxResponses }).map((_, i) => `response_${i + 1}`),
+      "createdAt",
+    ];
+
+    const escape = (v: any) => {
+      if (v === null || v === undefined) return '""';
+      const s = String(v).replace(/"/g, '""');
+      return `"${s}"`;
+    };
+
+    const rows = filtered.map((s) => {
+      const row: any[] = [];
+      row.push(s.toolType);
+      row.push(s.score);
+      row.push(s.riskLevel);
+      row.push(s.isAnonymous ? "true" : "false");
+      const responses = s.responses || [];
+      for (let i = 0; i < maxResponses; i++) {
+        row.push(responses[i] ?? "");
+      }
+      // Use Convex document creation time if available
+      const createdAt = (s as any)._creationTime ? new Date((s as any)._creationTime).toISOString() : "";
+      row.push(createdAt);
+      return row.map(escape).join(",");
+    });
+
+    const csv = [headers.map(escape).join(","), ...rows].join("\n");
+    return csv;
   },
 });

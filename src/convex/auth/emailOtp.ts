@@ -10,13 +10,12 @@ export const emailOtp = Email({
   generateVerificationToken() {
     return generateRandomString(6, alphabet("0-9"));
   },
-  async sendVerificationRequest({ identifier: email, provider, token }) {
+  async sendVerificationRequest({ identifier: email, token }) {
     const appName =
       process.env.APP_NAME || process.env.VITE_APP_NAME || "HealCare";
 
     // Local development: always log OTP to server console instead of sending email.
     // Convex server logs will show this output when running `npx convex dev`.
-    // eslint-disable-next-line no-console
     console.log(`[DEV OTP] to=${email} otp=${token} app=${appName}`);
   },
 });

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { api } from "@/convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery, useMutation } from "convex/react";
@@ -36,10 +37,13 @@ export function useAuth() {
     }
   }, [isAuthLoading, user, ensured, ensureRoles]);
 
+  const isAdmin = Boolean(user && (user as any).role === "admin");
+
   return {
     isLoading,
     isAuthenticated,
     user,
+    isAdmin,
     signIn,
     signOut,
   };
