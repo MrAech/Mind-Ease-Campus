@@ -5,7 +5,7 @@ MindEase-Campus is a modern mental healthcare web platform built with **React, V
 It provides an AI-driven, stigma-free environment for students to access mental health resources,  
 book confidential sessions, and interact with an integrated chatbot for early detection and support.
 
-![WhatsApp Image 2025-09-13 at 12 53 15_2cd1ee7b](https://github.com/user-attachments/assets/b71e177e-76ee-4944-9d40-4d9e819322b9)
+[Dashboard](https://github.com/user-attachments/assets/b71e177e-76ee-4944-9d40-4d9e819322b9)
 
  
 ## Features  
